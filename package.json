@@ -1,0 +1,33 @@
+{
+  "name": "electrokerot-scrapper",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node ./build/index.js",
+    "dev": "nodemon",
+    "build": "tsc && mkdir build && esbuild --platform=node --bundle --minify --outfile=./build/index.js ./src/index.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SwimmingPolar/electrokerot-scrapper.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/SwimmingPolar/electrokerot-scrapper/issues"
+  },
+  "homepage": "https://github.com/SwimmingPolar/electrokerot-scrapper#readme",
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^5.30.5",
+    "@typescript-eslint/parser": "^5.30.5",
+    "esbuild": "^0.14.48",
+    "eslint": "^8.19.0",
+    "eslint-config-prettier": "^8.5.0",
+    "nodemon": "^2.0.19",
+    "ts-node": "^10.8.2",
+    "tsconfig-paths": "^4.0.0",
+    "typescript": "^4.7.4"
+  }
+}
