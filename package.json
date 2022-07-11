@@ -4,8 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node ./build/index.js",
-    "dev": "nodemon",
+    "start": "nodemon -L",
     "build": "tsc && mkdir build && esbuild --platform=node --bundle --minify --outfile=./build/index.js ./src/index.ts"
   },
   "repository": {
@@ -20,6 +19,7 @@
   },
   "homepage": "https://github.com/SwimmingPolar/electrokerot-scrapper#readme",
   "devDependencies": {
+    "@types/express": "^4.17.13",
     "@typescript-eslint/eslint-plugin": "^5.30.5",
     "@typescript-eslint/parser": "^5.30.5",
     "esbuild": "^0.14.48",
@@ -29,5 +29,8 @@
     "ts-node": "^10.8.2",
     "tsconfig-paths": "^4.0.0",
     "typescript": "^4.7.4"
+  },
+  "dependencies": {
+    "express": "^4.18.1"
   }
 }

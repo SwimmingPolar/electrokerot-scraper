@@ -1,0 +1,53 @@
+version: '3.0'
+services:
+  redis:
+    image: redis
+    networks:
+      - electrokerot-scrapper-network
+    expose:
+      - '6379'
+  mongodb:
+    image: mongo
+    restart: always
+    volumes:
+      - electrokerot-mongodb:/data/db
+    networks:
+      - electrokerot-scrapper-network
+    ports:
+      - '27017:27017'
+  msa-db-updater:
+    image: node:18-alpine3.15
+    depends_on:
+      - mongodb
+      - redis
+    restart: always
+    volumes:
+      - ../electrokerot-msa-db-updater:/app
+      - /app/node_modules
+    networks:
+      - electrokerot-scrapper-network
+    expose:
+      - '5612'
+    working_dir: /app
+    command: sh -c "npm install && npm start"
+  scrapper:
+    image: node:18-alpine3.15
+    depends_on:
+      - redis
+      - mongodb
+      - msa-db-updater
+    restart: always
+    volumes:
+      - ../electrokerot-scrapper:/app
+      - /app/node_modules
+    networks:
+      - electrokerot-scrapper-network
+    expose:
+      - '10000'
+    working_dir: /app
+    command: sh -c "npm install && npm start"
+volumes:
+  electrokerot-mongodb:
+    external: true
+networks:
+  electrokerot-scrapper-network:
