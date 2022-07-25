@@ -4,7 +4,8 @@ import { getRedisClient } from './RedisHelper'
 import log from './logger'
 
 interface ScrapConfig {
-  baseUrl: string
+  pageBaseUrl: string
+  itemBaseUrl: string
   minimumDate?: string
   ignoreWords?: string[]
   categories: Category[]
@@ -38,13 +39,18 @@ export default async function parseConfig() {
   const browser = await initiateBrowser()
 
   try {
-    const configFilePath = process.env.CONFIG_PATH || 'config/scrapConfig.json'
-    const configFile = fs.readFileSync(configFilePath, {
+    const { CONFIG_FILE_PATH = 'config/scrapConfig.json' } = process.env
+    const configFile = fs.readFileSync(CONFIG_FILE_PATH, {
       encoding: 'utf8'
     })
     const config: ScrapConfig = JSON.parse(configFile)
-    const { baseUrl, minimumDate, ignoreWords, categories } = config
-    await client.SET('baseUrl', baseUrl)
+    const { pageBaseUrl, itemBaseUrl, minimumDate, ignoreWords, categories } =
+      config
+    await client
+      .multi()
+      .SET('pageBaseUrl', pageBaseUrl)
+      .SET('itemBaseUrl', itemBaseUrl)
+      .exec()
 
     // PARSE each categories
     await Promise.allSettled(
@@ -81,7 +87,7 @@ export default async function parseConfig() {
         // if end is not defined, scrap all pages
         if (!end || end === '*') {
           end = await getPages({
-            baseUrl,
+            baseUrl: pageBaseUrl,
             categoryNumber,
             filters: stringifiedFilters
           })
