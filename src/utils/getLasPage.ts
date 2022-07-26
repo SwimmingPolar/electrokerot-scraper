@@ -42,7 +42,6 @@ export async function getLastPage({
     await initiateBrowser()
   }
   const page = await browser.newPage()
-  page.on('console', text => text.text())
   try {
     /**
      * GOTO the target page

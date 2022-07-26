@@ -1,9 +1,16 @@
 import dotenv from 'dotenv'
-dotenv.config({
-  path: 'config/dev.env'
-})
+if (process.env.NODE_ENV === 'production') {
+  dotenv.config({
+    path: 'config/prod.env'
+  })
+} else {
+  dotenv.config({
+    path: 'config/dev.env'
+  })
+}
 import fs from 'fs'
 import fetch from 'node-fetch'
+import { add, formatDistanceToNow } from 'date-fns'
 // user defined
 import {
   parseConfig,
@@ -21,6 +28,7 @@ import { CategoryMeta } from './utils/parseConfig'
 ;(async () => {
   const client = await RedisHelper.getRedisClient()
 
+  // check scraper status
   const status = await client.GET('status')
   if (status === 'done') {
     log.error('ScraperMain', 'Scraper is already done')
@@ -31,6 +39,7 @@ import { CategoryMeta } from './utils/parseConfig'
     await client.SET('status', 'running')
   }
 
+  // base urls for scraping pages and items
   const [pageBaseUrl, itemBaseUrl] = (await client
     .multi()
     .GET('pageBaseUrl')
@@ -40,6 +49,7 @@ import { CategoryMeta } from './utils/parseConfig'
     log.error('ScraperMain', 'BaseUrl is not set')
     process.exit(1)
   }
+
   /**
    * Move pending work to current work bench
    */
@@ -48,6 +58,9 @@ import { CategoryMeta } from './utils/parseConfig'
   } catch (error) {
     log.error('HandlePending', error + '')
   }
+
+  // start estimating time to completion
+  estimateTimeToCompletion()
 
   /**
    * START PAGES SCRAPING
@@ -69,12 +82,14 @@ import { CategoryMeta } from './utils/parseConfig'
       /**
        * Get random category from redis
        */
-      const category = (await client.SRANDMEMBER('categories')) || ''
+      const category = (await client.SRANDMEMBER('categories')) as string
 
       /**
-       * Remove pages from redis
+       * Get 3 < n < 6 pages from redis
        */
-      const pages = await client.SPOP(`pages:${category}`, 5)
+      const pageCount = Math.ceil(Math.random() * 3 + 3)
+      const pages = await client.SPOP(`pages:${category}`, pageCount)
+
       // if the current category has no pages to scrap, delete it from categories and continue
       if (pages.length === 0) {
         const multi = client.multi().DEL('categories')
@@ -93,88 +108,31 @@ import { CategoryMeta } from './utils/parseConfig'
       const { categoryNumber, minimumDate, ignoreWords, filters } = categoryMeta
 
       /**
-       * Register to redis to know when the current pages are scraped
+       * Register pending pages to redis
+       * to know when the current pages are scraped
        */
-      // register to pending work
-      // retry until transaction is successful
-      // if transaction fails then retry again
-      // multiple updater instances are also accessing pending work
-      // so, transaction must be guaranteed to be ACID oriented
-      await retry(function () {
-        return new Promise<void>((resolve, reject) => {
-          ;(async () => {
-            try {
-              // watch for changes in redis
-              // if changes are detected then WatchError is thrown
-              const pendingPagesCategory = `pendingPages:${category}`
-              await client.WATCH(pendingPagesCategory)
-              await client.WATCH('pendingCategories')
-              await client
-                .multi()
-                .SADD(pendingPagesCategory, pages)
-                .SADD('pendingCategories', category)
-                .exec()
-              resolve()
-            } catch (error) {
-              if (error instanceof WatchError) {
-                reject()
-              } else {
-                log.error('ScraperMain', error + '')
-              }
-            }
-          })()
-        })
-      })()
+      await registerPendingWork('Pages', category, pages)
 
       /**
-       * Send request to scrap pages
+       * Send request to update pages
        */
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      await new Promise<void>((resolve, _) => {
-        ;(async function request() {
-          retry(fetch)('http://localhost:10000/updatePages', {
-            method: 'post',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              category,
-              url: pageBaseUrl + categoryNumber,
-              pages,
-              minimumDate,
-              ignoreWords,
-              filters
-            })
-          }).then(async response => {
-            const status = response.status
-            const result = (await response.json()) as { keepGoing: boolean }
-
-            /**
-             * KeepGoing: false - server is busy, then try again
-             */
-            if (status === 503 && result.keepGoing === false) {
-              setTimeout(request, 0)
-            } else {
-              resolve()
-            }
-          })
-        })()
+      const requestUrl =
+        process.env.UPDATE_PAGES_URL || 'http://localhost:10000/updatePages'
+      await sendRequest(requestUrl, {
+        category,
+        url: pageBaseUrl + categoryNumber,
+        pages,
+        minimumDate,
+        ignoreWords,
+        filters
       })
     } while (categoriesLength > 0)
 
     /**
      * Wait for all pending work before proceeding to next stage
      */
-    await retry(function () {
-      return new Promise<void>((resolve, reject) => {
-        ;(async () => {
-          const pendingWork = (await client.SMEMBERS('pendingCategories')) || []
-          if (pendingWork.length === 0) {
-            resolve()
-          } else {
-            setTimeout(reject, 500)
-          }
-        })()
-      })
-    })()
+    await waitForPendingWork('Pages')
   } catch (error) {
     log.error('ScrapPages', error + '')
   }
@@ -183,6 +141,7 @@ import { CategoryMeta } from './utils/parseConfig'
    * START ITEMS SCRAPING
    */
   try {
+    // get list of categories configured to be scraped
     const { CONFIG_FILE_PATH = 'config/scrapConfig.json' } = process.env
     const configFile = fs.readFileSync(CONFIG_FILE_PATH, {
       encoding: 'utf8'
@@ -191,8 +150,10 @@ import { CategoryMeta } from './utils/parseConfig'
       itemsCategories: string[]
     }
     const itemsCategoriesBackup = [...itemsCategories]
+
     // if there is no items categories to scrap, exit
     const db = await MongoHelper.getDb()
+
     // return random category from given categories
     const getRandom = (categories: string[]) =>
       categories[Math.floor(Math.random() * categories.length)] || undefined
@@ -203,31 +164,13 @@ import { CategoryMeta } from './utils/parseConfig'
       if (!category) {
         break
       }
-      const collection = db.collection(category)
 
       /**
-       * Find 10 items that are not currently updating and are not scraped yet
+       * Get 5 < n < 10 items from random category which are not
+       * currently updating and are not scraped yet
        */
-      const pcodes =
-        (
-          (await collection
-            .aggregate([
-              {
-                $match: {
-                  isUpdating: false,
-                  // updating starts at 13:00 and items that have
-                  // updatedAt time pass 13:00 are considered scraped
-                  updatedAt: { $lt: new Date(new Date().setHours(13, 0, 0)) }
-                }
-              },
-              { $project: { pcode: 1 } },
-              // limit items total to 6~10
-              {
-                $limit: Math.ceil(Math.random() * 5 + 5)
-              }
-            ])
-            .toArray()) as { pcode: string }[]
-        )?.map(({ pcode }) => pcode) || []
+      const collection = db.collection(category)
+      const pcodes = await getRandomItems(collection)
 
       // if there is no items to scrap, remove category from itemsCategories
       if (pcodes.length === 0) {
@@ -236,78 +179,26 @@ import { CategoryMeta } from './utils/parseConfig'
       }
 
       /**
-       * Send request to scrap items
+       * Send request to update items
        */
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      await new Promise<void>((resolve, _) => {
-        ;(async function request() {
-          retry(fetch)('http://localhost:10000/updateItems', {
-            method: 'post',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              baseUrl: itemBaseUrl,
-              category,
-              pcodes
-            })
-          }).then(async response => {
-            const status = response.status
-            const result = (await response.json()) as { keepGoing: boolean }
-
-            /**
-             * KeepGoing: false - server is busy, then try again
-             */
-            if (status === 503 && result.keepGoing === false) {
-              setTimeout(request, 0)
-            } else {
-              resolve()
-            }
-          })
-        })()
+      const requestUrl =
+        process.env.UPDATE_ITEMS_URL || 'http://localhost:10000/updateItems'
+      await sendRequest(requestUrl, {
+        baseUrl: itemBaseUrl,
+        category,
+        pcodes
       })
 
       /**
-       * Register items to pending work
+       * Register pending items to redis
        */
-      await retry(function () {
-        return new Promise<void>((resolve, reject) => {
-          ;(async () => {
-            try {
-              const pendingItemsCategory = `pendingItems:${category}`
-              await client.WATCH(pendingItemsCategory)
-              await client.WATCH('pendingItems')
-              await client
-                .multi()
-                .SADD(pendingItemsCategory, pcodes)
-                .SADD('pendingItems', category)
-                .exec()
-              resolve()
-            } catch (error) {
-              if (error instanceof WatchError) {
-                reject()
-              } else {
-                log.error('ScraperMain', error + '')
-              }
-            }
-          })()
-        })
-      })()
+      await registerPendingWork('Items', category, pcodes)
     }
 
     /**
      * Wait for all pending work before exiting
      */
-    await retry(function () {
-      return new Promise<void>((resolve, reject) => {
-        ;(async () => {
-          const pendingWork = (await client.SMEMBERS('pendingItems')) || []
-          if (pendingWork.length === 0) {
-            resolve()
-          } else {
-            setTimeout(reject, 500)
-          }
-        })()
-      })
-    })()
+    await waitForPendingWork('Items')
 
     /**
      * mark all items as scraped (isUpdating: false)
@@ -326,3 +217,214 @@ import { CategoryMeta } from './utils/parseConfig'
   await client.SET('status', 'done')
   log.info('Scraper is done and exiting')
 })()
+
+// register to pending work
+// retry until transaction is successful
+// if transaction fails then retry again
+// multiple updater instances are accessing pending work at the same time
+// so, transaction must guaranteed to be ACID oriented
+async function registerPendingWork(
+  pendingWorkTypePrefix: string,
+  category: string,
+  works: string[]
+): Promise<void> {
+  // get redis client
+  const client = await RedisHelper.getRedisClient()
+  return retry(function () {
+    return new Promise<void>((resolve, reject) => {
+      ;(async () => {
+        try {
+          // watch for changes in redis
+          // if changes are detected then WatchError is thrown
+          const pendingWorkCategoriesKey = `pending${pendingWorkTypePrefix}`
+          const pendingWorkKey = `pending${pendingWorkTypePrefix}:${category}`
+          await client.WATCH([pendingWorkCategoriesKey, pendingWorkKey])
+
+          await client
+            .multi()
+            .SADD(pendingWorkKey, works)
+            .SADD(pendingWorkCategoriesKey, category)
+            .exec()
+          resolve()
+        } catch (error) {
+          if (error instanceof WatchError) {
+            reject()
+          } else {
+            log.error('Scrapper Main', 'Registering pending work: ' + error)
+          }
+        }
+      })()
+    })
+  })()
+}
+
+// wait for pending work
+async function waitForPendingWork(pendingWorkTypePrefix: string) {
+  const client = await RedisHelper.getRedisClient()
+  return retry(function () {
+    return new Promise<void>((resolve, reject) => {
+      ;(async () => {
+        const pendingWork =
+          (await client.SMEMBERS(`pending${pendingWorkTypePrefix}`)) || []
+        if (pendingWork.length === 0) {
+          resolve()
+        } else {
+          setTimeout(reject, 500)
+        }
+      })()
+    })
+  })()
+}
+
+function sendRequest(url: string, body: Record<string, unknown>) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  return new Promise<void>((resolve, _) => {
+    ;(async function request() {
+      retry(fetch)(url, {
+        method: 'post',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      }).then(async response => {
+        const status = response.status
+        const result = (await response.json()) as { keepGoing: boolean }
+
+        /**
+         * KeepGoing: false - server is busy, then try again
+         */
+        if (status === 503 && result.keepGoing === false) {
+          setTimeout(request, 0)
+        } else {
+          resolve()
+        }
+      })
+    })()
+  })
+}
+
+import { Collection } from 'mongodb'
+async function getRandomItems(collection: Collection) {
+  return (
+    (
+      (await collection
+        .aggregate([
+          {
+            $match: {
+              isUpdating: false,
+              // updating starts at 13:00 and items that have
+              // updatedAt time pass 13:00 are considered scraped
+              updatedAt: { $lt: new Date(new Date().setHours(13, 0, 0)) }
+            }
+          },
+          { $project: { pcode: 1 } },
+          // limit items total to 5~10
+          {
+            $limit: Math.ceil(Math.random() * 5 + 5)
+          }
+        ])
+        .toArray()) as { pcode: string }[]
+    )?.map(({ pcode }) => pcode) || []
+  )
+}
+
+async function estimateTimeToCompletion() {
+  const client = await RedisHelper.getRedisClient()
+  const db = await MongoHelper.getDb()
+  let timer: ReturnType<typeof setInterval>
+  const remainingRequestsHistory: number[] = []
+  const INTERVAL = 3000
+
+  async function getRemainingPages() {
+    // remaining pages
+    const pages = await client.SMEMBERS('categories')
+    const pendingPages = await client.SMEMBERS('pendingPages')
+    const multi = client.multi()
+    pages.forEach(page => multi.SMEMBERS(`pages:${page}`))
+    pendingPages.forEach(pendingPage =>
+      multi.SMEMBERS(`pendingPages:${pendingPage}`)
+    )
+    const results = (await multi.exec()) as string[][]
+    const remainingPages = results.reduce(
+      (totalPages, page) => totalPages + page.length,
+      0
+    )
+    return remainingPages
+  }
+  async function getRemainingItems() {
+    const { CONFIG_FILE_PATH = 'config/scrapConfig.json' } = process.env
+    const configFile = fs.readFileSync(CONFIG_FILE_PATH, {
+      encoding: 'utf8'
+    })
+    const { itemsCategories = [] } = JSON.parse(configFile) as {
+      itemsCategories: string[]
+    }
+
+    let remainingItems = 0
+    for await (const category of itemsCategories) {
+      // pending items in redis
+      const pendingItems =
+        (await client.SMEMBERS(`pendingItems:${category}`)) || []
+      // items to be updated in db
+      const collection = db.collection(category)
+
+      remainingItems +=
+        pendingItems.length +
+          (await collection.count({
+            isUpdating: false,
+            updatedAt: {
+              $lt: new Date(new Date().setHours(13, 0, 0))
+            }
+          })) || 0
+    }
+    return remainingItems
+  }
+
+  async function init() {
+    const remainingPages = await getRemainingPages()
+    const remainingItems = await getRemainingItems()
+    log.info('Total pages to scrap: ', remainingPages + '')
+    log.info('Total items to update :', remainingItems + '\n')
+
+    remainingRequestsHistory.push(remainingPages + remainingItems)
+
+    // start timer
+    timer = setInterval(async () => {
+      const remainingRequests =
+        (await getRemainingPages()) + (await getRemainingItems())
+
+      remainingRequestsHistory.push(remainingRequests)
+      // maintain history of remaining requests to 1000
+      if (remainingRequestsHistory.length >= 1000) {
+        remainingRequestsHistory.shift()
+      }
+
+      const averageProcessedRequestsPerInterval =
+        remainingRequestsHistory
+          .map((_, i, arr) => arr[i - 1] - arr[i])
+          .filter(e => e)
+          .reduce((prev, cur) => prev + cur) /
+        (remainingRequestsHistory.length - 1)
+
+      const estimatedTimeToCompletionInSeconds = Math.round(
+        remainingRequests /
+          (averageProcessedRequestsPerInterval / (INTERVAL / 1000))
+      )
+      const estimatedCompletionTime = add(new Date(), {
+        seconds: estimatedTimeToCompletionInSeconds
+      })
+
+      log.info(
+        // go up a line / clear current line
+        `\u001b[1A\u001b[KEstimated time to completion:`,
+        formatDistanceToNow(estimatedCompletionTime)
+      )
+
+      // if estimated time to completion is less than 1 minute, then stop timer
+      if (estimatedTimeToCompletionInSeconds < 60) {
+        clearInterval(timer)
+      }
+    }, INTERVAL)
+  }
+
+  log.info('Estimating time to completion...')
+  init()
+}

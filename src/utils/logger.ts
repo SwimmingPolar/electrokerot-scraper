@@ -6,16 +6,18 @@ import { greenBright, yellowBright, cyanBright, redBright } from 'chalk'
  */
 const log = {
   /**
-   *
    * log successful message to console
    * @param info Message to show
    */
-  info(info: string): void {
-    console.log(
-      new Date().toISOString() +
+  info(info: string, emphasis?: string): void {
+    process.stdout.write(
+      '\n' +
+        new Date().toISOString() +
         ' ' +
         `[${greenBright('INFO')}] ` +
-        cyanBright(info)
+        cyanBright(info) +
+        yellowBright(emphasis || '') +
+        '\n'
     )
   },
   /**
@@ -24,12 +26,13 @@ const log = {
    * @param error Error message
    */
   error(invoker: string, error: string): void {
-    console.log(
+    process.stdout.write(
       new Date().toISOString() +
         ' ' +
         `[${yellowBright('ERROR')}] ${yellowBright(invoker)}` +
         ': ' +
-        redBright(error)
+        redBright(error) +
+        '\n'
     )
   }
 }

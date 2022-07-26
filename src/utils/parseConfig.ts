@@ -53,61 +53,59 @@ export default async function () {
       .exec()
 
     // PARSE each categories
-    await Promise.allSettled(
-      categories.map(async (category, i) => {
-        const { category: categoryName } = category
-        const { categoryNumber, filters = [] } = category
-        // override minimumDate if specified in category
-        const minimumDateOverride = minimumDate
-          ? minimumDate
-          : category.minimumDate
+    for await (const category of categories) {
+      const { category: categoryName } = category
+      const { categoryNumber, filters = [] } = category
+      // override minimumDate if specified in category
+      const minimumDateOverride = minimumDate
+        ? minimumDate
+        : category.minimumDate
 
-        // merge ignoreWords with ignoreWords in category
-        const ignoreWordsMerged =
-          ignoreWords?.concat(category.ignoreWords || []) || []
+      // merge ignoreWords with ignoreWords in category
+      const ignoreWordsMerged =
+        ignoreWords?.concat(category.ignoreWords || []) || []
 
-        // stringify filters
-        const stringifiedFilters = filters.map(
-          ({ type, value }) =>
-            `${
-              type === 'maker' ? '#searchMaker' : '#searchAttributeValue'
-            }${value}`
-        )
+      // stringify filters
+      const stringifiedFilters = filters.map(
+        ({ type, value }) =>
+          `${
+            type === 'maker' ? '#searchMaker' : '#searchAttributeValue'
+          }${value}`
+      )
 
-        const categoryMeta = {
+      const categoryMeta = {
+        categoryNumber,
+        minimumDate: minimumDateOverride,
+        ignoreWords: ignoreWordsMerged,
+        filters: stringifiedFilters
+      }
+      // set category meta to redis as stringified JSON
+      await client.SET(categoryName, JSON.stringify(categoryMeta))
+
+      let end: number | string | undefined = category.end
+      // if end is not defined, scrap all pages
+      if (!end || end === '*') {
+        end = await getLastPage({
+          baseUrl: pageBaseUrl,
           categoryNumber,
-          minimumDate: minimumDateOverride,
-          ignoreWords: ignoreWordsMerged,
           filters: stringifiedFilters
-        }
-        // set category meta to redis as stringified JSON
-        await client.SET(categoryName, JSON.stringify(categoryMeta))
+        })
+      }
 
-        let end: number | string | undefined = category.end
-        // if end is not defined, scrap all pages
-        if (!end || end === '*') {
-          end = await getLastPage({
-            baseUrl: pageBaseUrl,
-            categoryNumber,
-            filters: stringifiedFilters
-          })
-        }
+      const start = 1
+      end = parseInt(end)
+      // split each page index into chunks and shuffle order
+      const pages = Array.from(
+        { length: end - start + 1 },
+        (_, i) => start + i + ''
+      ).sort(() => Math.random() - 0.5)
 
-        const start = 1
-        end = parseInt(end)
-        // split each page index into chunks and shuffle order
-        const pages = Array.from(
-          { length: end - start + 1 },
-          (_, i) => start + i + ''
-        ).sort(() => Math.random() - 0.5)
-
-        await client
-          .multi()
-          .SADD('categories', categoryName)
-          .SADD(`pages:${categoryName}`, pages)
-          .exec()
-      })
-    )
+      await client
+        .multi()
+        .SADD('categories', categoryName)
+        .SADD(`pages:${categoryName}`, pages)
+        .exec()
+    }
   } catch (error) {
     log.error('ParseConfig', error + '')
   } finally {

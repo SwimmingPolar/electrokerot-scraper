@@ -1,14 +1,15 @@
 import { createClient } from 'redis'
 import log from 'utils/logger'
 
-const client = createClient({
-  password: process.env.REDIS_PASSWORD
-})
+let client: ReturnType<typeof createClient>
 
 let isInitialized = false
 
 export default async function initiateRedisClient() {
   try {
+    client = createClient({
+      password: process.env.REDIS_PASSWORD
+    })
     await client.connect()
   } catch (error) {
     log.error('RedisHelper', 'Error connecting to redis, exiting')
