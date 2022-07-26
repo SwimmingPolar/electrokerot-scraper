@@ -1,1 +1,1 @@
-# electrokerot-scrapper
+# electrokerot-scraper

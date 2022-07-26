@@ -15,10 +15,10 @@ import { getDb } from 'utils/MongodbHelper'
 import { WatchError } from 'redis'
 ;(async () => {
   const client = await getRedisClient()
-  
+
   const status = await client.GET('status')
   if (status === 'done') {
-    log.error('ScrapperMain', 'Scrapper is already done')
+    log.error('ScraperMain', 'Scraper is already done')
     process.exit(0)
   }
   if (status !== 'running') {
@@ -32,7 +32,7 @@ import { WatchError } from 'redis'
     .GET('itemBaseUrl')
     .exec()) as [string, string]
   if (!pageBaseUrl || !itemBaseUrl) {
-    log.error('ScrapperMain', 'BaseUrl is not set')
+    log.error('ScraperMain', 'BaseUrl is not set')
     process.exit(1)
   }
   /**
@@ -45,7 +45,7 @@ import { WatchError } from 'redis'
   }
 
   /**
-   * START PAGES SCRAPPING
+   * START PAGES SCRAPING
    */
   try {
     let categoriesLength: number
@@ -88,7 +88,7 @@ import { WatchError } from 'redis'
       const { categoryNumber, minimumDate, ignoreWords, filters } = categoryMeta
 
       /**
-       * Register to redis to know when the current pages are scrapped
+       * Register to redis to know when the current pages are scraped
        */
       // register to pending work
       // retry until transaction is successful
@@ -114,7 +114,7 @@ import { WatchError } from 'redis'
               if (error instanceof WatchError) {
                 reject()
               } else {
-                log.error('ScrapperMain1', error + '')
+                log.error('ScraperMain', error + '')
               }
             }
           })()
@@ -174,11 +174,11 @@ import { WatchError } from 'redis'
   }
 
   /**
-   * START ITEMS SCRAPPING
+   * START ITEMS SCRAPING
    */
   try {
     const { CONFIG_FILE_PATH = 'config/scrapConfig.json' } = process.env
-    let configFile = fs.readFileSync(CONFIG_FILE_PATH, {
+    const configFile = fs.readFileSync(CONFIG_FILE_PATH, {
       encoding: 'utf8'
     })
     const { itemsCategories = [] } = JSON.parse(configFile) as {
@@ -278,7 +278,7 @@ import { WatchError } from 'redis'
               if (error instanceof WatchError) {
                 reject()
               } else {
-                log.error('ScrapperMain1', error + '')
+                log.error('ScraperMain', error + '')
               }
             }
           })()
@@ -315,7 +315,7 @@ import { WatchError } from 'redis'
 
   // exit the program
   // container will go down and running status will be reset if correctly configured
-  // indicating that the scrapper is ready to start again on next restart
+  // indicating that the scraper is ready to start again on next restart
   await client.SET('status', 'done')
-  log.info('Scrapper is done and exiting')
+  log.info('Scraper is done and exiting')
 })()

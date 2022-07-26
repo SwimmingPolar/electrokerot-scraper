@@ -6,7 +6,7 @@ services:
     volumes:
       - electrokerot-redis:/data
     networks:
-      - electrokerot-scrapper-network
+      - electrokerot-scraper-network
     expose:
       - '6379'
     command: redis-server --save 30 1 --loglevel warning
@@ -16,20 +16,20 @@ services:
     volumes:
       - electrokerot-mongodb:/data/db
     networks:
-      - electrokerot-scrapper-network
+      - electrokerot-scraper-network
     ports:
       - '27017:27017'
-  scrapper:
+  scraper:
     image: node:18-alpine3.15
     depends_on:
       - redis
       - mongodb
     restart: always
     volumes:
-      - ../electrokerot-scrapper:/app
+      - ../electrokerot-scraper:/app
       - /app/node_modules
     networks:
-      - electrokerot-scrapper-network
+      - electrokerot-scraper-network
     working_dir: /app
     command: sh -c "npm install && npm start"
   msa-db-updater:
@@ -42,7 +42,7 @@ services:
       - ../electrokerot-msa-db-updater:/app
       - /app/node_modules
     networks:
-      - electrokerot-scrapper-network
+      - electrokerot-scraper-network
     expose:
       - '10000'
     working_dir: /app
@@ -57,7 +57,7 @@ services:
       - ../electrokerot-crawler:/app
       - /app/node_modules
     networks:
-      - electrokerot-scrapper-network
+      - electrokerot-scraper-network
     expose:
       - '20000'
     working_dir: /app
@@ -68,4 +68,4 @@ volumes:
   electrokerot-redis:
     external: true
 networks:
-  electrokerot-scrapper-network:
+  electrokerot-scraper-network:
