@@ -3,18 +3,23 @@ dotenv.config({
   path: 'config/dev.env'
 })
 import fs from 'fs'
-import { getRedisClient } from 'utils/RedisHelper'
-import parseConfig, { CategoryMeta } from './utils/parseConfig'
-import handlePending from './utils/handlePending'
-import log from 'utils/logger'
 import fetch from 'node-fetch'
-import retry from 'utils/retry'
-import { getDb } from 'utils/MongodbHelper'
+// user defined
+import {
+  parseConfig,
+  handlePending,
+  log,
+  retry,
+  RedisHelper,
+  MongoHelper
+} from 'utils'
+// types
+import { WatchError } from 'redis'
+import { CategoryMeta } from './utils/parseConfig'
 
 // ignore prettier
-import { WatchError } from 'redis'
 ;(async () => {
-  const client = await getRedisClient()
+  const client = await RedisHelper.getRedisClient()
 
   const status = await client.GET('status')
   if (status === 'done') {
@@ -124,6 +129,7 @@ import { WatchError } from 'redis'
       /**
        * Send request to scrap pages
        */
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       await new Promise<void>((resolve, _) => {
         ;(async function request() {
           retry(fetch)('http://localhost:10000/updatePages', {
@@ -186,7 +192,7 @@ import { WatchError } from 'redis'
     }
     const itemsCategoriesBackup = [...itemsCategories]
     // if there is no items categories to scrap, exit
-    const db = await getDb()
+    const db = await MongoHelper.getDb()
     // return random category from given categories
     const getRandom = (categories: string[]) =>
       categories[Math.floor(Math.random() * categories.length)] || undefined
@@ -232,6 +238,7 @@ import { WatchError } from 'redis'
       /**
        * Send request to scrap items
        */
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       await new Promise<void>((resolve, _) => {
         ;(async function request() {
           retry(fetch)('http://localhost:10000/updateItems', {

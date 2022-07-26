@@ -1,5 +1,3 @@
-import fs from 'fs'
-
 import { greenBright, yellowBright, cyanBright, redBright } from 'chalk'
 
 /**

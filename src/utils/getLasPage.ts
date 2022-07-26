@@ -1,8 +1,8 @@
-import { Browser, Page } from 'puppeteer'
+import { Browser } from 'puppeteer'
 import puppeteer from 'puppeteer-extra'
 import AdblockerPlugin from 'puppeteer-extra-plugin-adblocker'
 import StealthPlugin from 'puppeteer-extra-plugin-stealth'
-import log from 'utils/logger'
+import log from './logger'
 
 let browser: Browser
 
@@ -29,7 +29,7 @@ export default async function initiateBrowser() {
   return browser
 }
 
-export async function getPages({
+export async function getLastPage({
   baseUrl,
   categoryNumber,
   filters = []
@@ -98,7 +98,7 @@ export async function getPages({
         (contentSelector, nextButtonSelector) => {
           document.querySelector<HTMLDivElement>(`${contentSelector}`)?.remove()
           // if there is next page, click it
-          let nextButton =
+          const nextButton =
             document.querySelector<HTMLAnchorElement>(nextButtonSelector)
           nextButton?.click()
 

@@ -1,5 +1,5 @@
-import { getRedisClient } from './RedisHelper'
-import { getDb } from './MongodbHelper'
+import { getRedisClient } from './redisHelper'
+import { getDb } from './mongoHelper'
 
 export default async function () {
   const client = await getRedisClient()

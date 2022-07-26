@@ -1,6 +1,6 @@
 import fs from 'fs'
-import initiateBrowser, { getPages } from './getPages'
-import { getRedisClient } from './RedisHelper'
+import { getRedisClient } from './redisHelper'
+import initiateBrowser, { getLastPage } from './getLasPage'
 import log from './logger'
 
 interface ScrapConfig {
@@ -34,7 +34,7 @@ export interface CategoryMeta {
   filters?: string[]
 }
 
-export default async function parseConfig() {
+export default async function () {
   const client = await getRedisClient()
   const browser = await initiateBrowser()
 
@@ -58,7 +58,7 @@ export default async function parseConfig() {
         const { category: categoryName } = category
         const { categoryNumber, filters = [] } = category
         // override minimumDate if specified in category
-        const minimumDateOverride = !!minimumDate
+        const minimumDateOverride = minimumDate
           ? minimumDate
           : category.minimumDate
 
@@ -80,24 +80,26 @@ export default async function parseConfig() {
           ignoreWords: ignoreWordsMerged,
           filters: stringifiedFilters
         }
-        // set category meta to redis as strinified JSON
+        // set category meta to redis as stringified JSON
         await client.SET(categoryName, JSON.stringify(categoryMeta))
 
-        let { start = '1', end } = category
+        let end: number | string | undefined = category.end
         // if end is not defined, scrap all pages
         if (!end || end === '*') {
-          end = await getPages({
+          end = await getLastPage({
             baseUrl: pageBaseUrl,
             categoryNumber,
             filters: stringifiedFilters
           })
         }
 
+        const start = 1
+        end = parseInt(end)
         // split each page index into chunks and shuffle order
         const pages = Array.from(
-          { length: +end - +start + 1 },
-          (_, i) => +start + i + ''
-        ).sort(() => Math.random() * 0.5)
+          { length: end - start + 1 },
+          (_, i) => start + i + ''
+        ).sort(() => Math.random() - 0.5)
 
         await client
           .multi()

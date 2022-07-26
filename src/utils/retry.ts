@@ -1,4 +1,3 @@
-import log from 'utils/logger'
 type Fn<Args extends any[], ReturnType> = (...args: Args) => Promise<ReturnType>
 export default function <Args extends any[], ReturnType>(
   callback: Fn<Args, ReturnType>,
