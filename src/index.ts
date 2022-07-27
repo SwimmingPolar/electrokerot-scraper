@@ -1,9 +1,5 @@
 import dotenv from 'dotenv'
-if (process.env.NODE_ENV === 'production') {
-  dotenv.config({
-    path: 'config/prod.env'
-  })
-} else {
+if (process.env.NODE_ENV === 'development') {
   dotenv.config({
     path: 'config/dev.env'
   })
@@ -193,6 +189,7 @@ import { CategoryMeta } from './utils/parseConfig'
        * Register pending items to redis
        */
       await registerPendingWork('Items', category, pcodes)
+      await markIsUpdating(category, pcodes)
     }
 
     /**
@@ -256,6 +253,22 @@ async function registerPendingWork(
       })()
     })
   })()
+}
+
+async function markIsUpdating(category: string, pcodes: string[]) {
+  const db = await MongoHelper.getDb()
+  const collection = db.collection(category)
+
+  const queries = pcodes.map(pcode => ({
+    updateOne: {
+      filter: { pcode },
+      update: {
+        $set: { isUpdating: true }
+      }
+    }
+  }))
+
+  await collection.bulkWrite(queries)
 }
 
 // wait for pending work
@@ -329,7 +342,6 @@ async function getRandomItems(collection: Collection) {
 async function estimateTimeToCompletion() {
   const client = await RedisHelper.getRedisClient()
   const db = await MongoHelper.getDb()
-  let timer: ReturnType<typeof setInterval>
   const remainingRequestsHistory: number[] = []
   const INTERVAL = 3000
 
@@ -379,17 +391,16 @@ async function estimateTimeToCompletion() {
   }
 
   async function init() {
-    const remainingPages = await getRemainingPages()
-    const remainingItems = await getRemainingItems()
-    log.info('Total pages to scrap: ', remainingPages + '')
-    log.info('Total items to update :', remainingItems + '\n')
+    const totalPages = await getRemainingPages()
+    const totalItems = await getRemainingItems()
 
-    remainingRequestsHistory.push(remainingPages + remainingItems)
+    remainingRequestsHistory.push(totalPages + totalItems)
 
     // start timer
-    timer = setInterval(async () => {
-      const remainingRequests =
-        (await getRemainingPages()) + (await getRemainingItems())
+    setInterval(async () => {
+      const remainingPages = await getRemainingPages()
+      const remainingItems = await getRemainingItems()
+      const remainingRequests = remainingPages + remainingItems
 
       remainingRequestsHistory.push(remainingRequests)
       // maintain history of remaining requests to 1000
@@ -401,26 +412,31 @@ async function estimateTimeToCompletion() {
         remainingRequestsHistory
           .map((_, i, arr) => arr[i - 1] - arr[i])
           .filter(e => e)
-          .reduce((prev, cur) => prev + cur) /
+          .reduce((prev, cur) => prev + cur, 0) /
         (remainingRequestsHistory.length - 1)
 
+      const averageRequestsPerSecond =
+        averageProcessedRequestsPerInterval / (INTERVAL / 1000)
       const estimatedTimeToCompletionInSeconds = Math.round(
-        remainingRequests /
-          (averageProcessedRequestsPerInterval / (INTERVAL / 1000))
-      )
-      const estimatedCompletionTime = add(new Date(), {
-        seconds: estimatedTimeToCompletionInSeconds
-      })
-
-      log.info(
-        // go up a line / clear current line
-        `\u001b[1A\u001b[KEstimated time to completion:`,
-        formatDistanceToNow(estimatedCompletionTime)
+        remainingRequests / averageRequestsPerSecond
       )
 
-      // if estimated time to completion is less than 1 minute, then stop timer
-      if (estimatedTimeToCompletionInSeconds < 60) {
-        clearInterval(timer)
+      if (Number.isInteger(estimatedTimeToCompletionInSeconds)) {
+        const estimatedCompletionTime = add(new Date(), {
+          seconds: estimatedTimeToCompletionInSeconds
+        })
+
+        process.stdout.write('\u001b[3J\u001b[2J\u001b[1J')
+        console.clear()
+        log.info('Total pages to scrap: ', `${remainingPages}/${totalPages}`)
+        log.info('Total items to update: ', `${remainingItems}/${totalItems}`)
+        log.info(
+          // go up a line / clear current line
+          'Estimated time to completion: ',
+          `${formatDistanceToNow(
+            estimatedCompletionTime
+          )} (avg. ${averageRequestsPerSecond} requests/s)`
+        )
       }
     }, INTERVAL)
   }

@@ -1,0 +1,217 @@
+{
+  "pageBaseUrl": "https://prod.danawa.com/list/?cate=",
+  "itemBaseUrl": "https://prod.danawa.com/info/?pcode=",
+  "minimumDate": "2018",
+  "ignoreWords": ["채굴", "마이닝", "중고"],
+  "itemsCategories": [
+    "cpu",
+    "mainboard",
+    "memory",
+    "graphics",
+    "hdd",
+    "ssd",
+    "power",
+    "case",
+    "cooler"
+  ],
+  "categories": [
+    {
+      "category": "cpu",
+      "categoryNumber": "112747",
+      "start": "1",
+      "end": "*",
+      "filters": [
+        {
+          "name": "제조사: 인텔",
+          "type": "maker",
+          "value": "3156"
+        },
+        {
+          "name": "제조사: AMD",
+          "type": "maker",
+          "value": "3132"
+        }
+      ]
+    },
+    {
+      "category": "mainboard",
+      "categoryNumber": "112751",
+      "start": "1",
+      "end": "*",
+      "filters": [
+        {
+          "name": "인텔 CPU 전용",
+          "type": "attribute",
+          "value": "2153"
+        },
+        {
+          "name": "AMD CPU 전용",
+          "type": "attribute",
+          "value": "2154"
+        }
+      ]
+    },
+    {
+      "category": "memory",
+      "categoryNumber": "112752",
+      "start": "1",
+      "end": "*",
+      "filters": [
+        {
+          "name": "데스크탑 전용",
+          "type": "attribute",
+          "value": "1223"
+        }
+      ]
+    },
+    {
+      "category": "graphics",
+      "categoryNumber": "112753",
+      "start": "1",
+      "end": "*",
+      "filters": [
+        {
+          "name": "NVIDIA 칩셋",
+          "type": "attribute",
+          "value": "3518"
+        },
+        {
+          "name": "AMD 칩셋",
+          "type": "attribute",
+          "value": "3517"
+        }
+      ]
+    },
+    {
+      "category": "ssd",
+      "categoryNumber": "112760",
+      "start": "1",
+      "end": "*",
+      "filters": [
+        {
+          "name": "데스크탑 전용",
+          "type": "attribute",
+          "value": "636719"
+        }
+      ]
+    },
+    {
+      "category": "hdd",
+      "categoryNumber": "112763",
+      "start": "1",
+      "end": "*",
+      "minimumDate": "0",
+      "filters": [
+        {
+          "name": "데스크탑 전용",
+          "type": "attribute",
+          "value": "4393"
+        }
+      ]
+    },
+    {
+      "category": "case",
+      "categoryNumber": "112775",
+      "start": "1",
+      "end": "*",
+      "filters": [
+        {
+          "name": "ATX",
+          "type": "attribute",
+          "value": "5112"
+        },
+        {
+          "name": "M-ATX",
+          "type": "attribute",
+          "value": "153734"
+        },
+        {
+          "name": "RTX",
+          "type": "attribute",
+          "value": "131810"
+        },
+        {
+          "name": "미니 ITX",
+          "type": "attribute",
+          "value": "5115"
+        },
+        {
+          "name": "튜닝 케이스",
+          "type": "attribute",
+          "value": "5116"
+        }
+      ]
+    },
+    {
+      "category": "power",
+      "categoryNumber": "112777",
+      "start": "1",
+      "end": "*",
+      "filters": [
+        {
+          "name": "ATX 파워",
+          "type": "attribute",
+          "value": "5529"
+        },
+        {
+          "name": "M-ATX 파워",
+          "type": "attribute",
+          "value": "5530"
+        }
+      ]
+    },
+    {
+      "category": "cooler",
+      "categoryNumber": "11236855",
+      "start": "1",
+      "end": "*",
+      "filters": [
+        {
+          "name": "CPU 쿨러",
+          "type": "attribute",
+          "value": "4015"
+        },
+        {
+          "name": "시스템 쿨러",
+          "type": "attribute",
+          "value": "4017"
+        },
+        { "name": "3RSYS", "type": "maker", "value": "94456" },
+        { "name": "ALPHACOOL", "type": "maker", "value": "43489745" },
+        { "name": "ARCTIC", "type": "maker", "value": "45196" },
+        { "name": "ASRock", "type": "maker", "value": "4503" },
+        { "name": "ASUS", "type": "maker", "value": "2869" },
+        { "name": "BRAVOTEC", "type": "maker", "value": "57038" },
+        { "name": "CORSAIR", "type": "maker", "value": "4127" },
+        { "name": "COUGAR", "type": "maker", "value": "28016" },
+        { "name": "darkFlash", "type": "maker", "value": "15938410" },
+        { "name": "DEEPCOOL", "type": "maker", "value": "51853" },
+        { "name": "EVGA", "type": "maker", "value": "5408" },
+        { "name": "FSP", "type": "maker", "value": "4450" },
+        { "name": "G.SKILL", "type": "maker", "value": "4130" },
+        { "name": "GIGABYTE", "type": "maker", "value": "3148" },
+        { "name": "JONSBO", "type": "maker", "value": "117525" },
+        { "name": "MSI", "type": "maker", "value": "2904" },
+        { "name": "NOCTUA", "type": "maker", "value": "32727" },
+        { "name": "NZXT", "type": "maker", "value": "32917" },
+        { "name": "PCCOOLER", "type": "maker", "value": "90587" },
+        { "name": "SilverStone", "type": "maker", "value": "5738" },
+        { "name": "Thermalright", "type": "maker", "value": "3210" },
+        { "name": "대양케이스", "type": "maker", "value": "91704" },
+        { "name": "리안리", "type": "maker", "value": "4192" },
+        { "name": "마이크로닉스", "type": "maker", "value": "3160" },
+        { "name": "맥스엘리트", "type": "maker", "value": "105703" },
+        { "name": "시스기어", "type": "maker", "value": "112539" },
+        { "name": "싸이오닉", "type": "maker", "value": "41818805" },
+        { "name": "써멀테이크", "type": "maker", "value": "3186" },
+        { "name": "써모랩", "type": "maker", "value": "22601" },
+        { "name": "앱코", "type": "maker", "value": "2108" },
+        { "name": "에너맥스", "type": "maker", "value": "3851" },
+        { "name": "이엠텍", "type": "maker", "value": "4527" },
+        { "name": "인텔", "type": "maker", "value": "3156" },
+        { "name": "잘만", "type": "maker", "value": "3157" },
+        { "name": "쿨러마스터", "type": "maker", "value": "3134" }
+      ]
+    }
+  ]
+}

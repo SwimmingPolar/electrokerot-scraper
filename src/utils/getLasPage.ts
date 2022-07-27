@@ -9,21 +9,27 @@ let browser: Browser
 puppeteer.use(AdblockerPlugin({ blockTrackers: true })).use(StealthPlugin())
 
 export default async function initiateBrowser() {
+  // execution context
+  const isProduction = process.env.NODE_ENV === 'production'
+  // different config for execution context
+  const puppeteerConfig = {
+    defaultViewport: null,
+    headless: isProduction ? true : false,
+    executablePath: isProduction
+      ? process.env.PUPPETEER_EXECUTABLE_PATH
+      : puppeteer.executablePath(),
+    args: ['--disable-dev-shm-usage', '--no-sandbox']
+  }
+
   if (!browser) {
     try {
-      browser = await puppeteer.launch({
-        headless: false,
-        defaultViewport: null,
-        executablePath: puppeteer.executablePath(),
-        args: ['--disable-dev-shm-usage', '--no-sandbox']
-      })
-
+      browser = await puppeteer.launch(puppeteerConfig)
       // re-open browser in case it crashes
       browser.on('disconnected', async () => {
         await initiateBrowser()
       })
     } catch (error) {
-      log.error('puppeteerHelper', 'browser instantiating failure')
+      log.error('PuppeteerHelper', error + '')
     }
   }
   return browser
@@ -54,6 +60,9 @@ export async function getLastPage({
     // disconnect network to prevent redundant http requests
     if (filters && filters.length > 0) {
       // open filters
+      await page.waitForSelector(
+        '#frmProductList > div.option_nav > div.nav_header > div.head_opt > button'
+      )
       await Promise.all([
         page.click(
           '#frmProductList > div.option_nav > div.nav_header > div.head_opt > button'

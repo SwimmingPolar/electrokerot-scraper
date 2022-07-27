@@ -1,4 +1,5 @@
-import { greenBright, yellowBright, cyanBright, redBright } from 'chalk'
+import chalk from 'chalk'
+const { greenBright, yellowBright, cyanBright, redBright } = chalk
 
 /**
  * @method info
@@ -11,8 +12,7 @@ const log = {
    */
   info(info: string, emphasis?: string): void {
     process.stdout.write(
-      '\n' +
-        new Date().toISOString() +
+      new Date().toISOString() +
         ' ' +
         `[${greenBright('INFO')}] ` +
         cyanBright(info) +

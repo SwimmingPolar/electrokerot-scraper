@@ -6,7 +6,7 @@ let db: Db
 
 export default async function initiateMongoClient() {
   try {
-    const MONGODB_URL = process.env.MONGODB_URL || ''
+    const { MONGODB_URL = '' } = process.env
     mongoClient = await new MongoClient(MONGODB_URL).connect()
 
     const DB_NAME = process.env.DB_NAME || 'default_db'

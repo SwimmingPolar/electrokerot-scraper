@@ -1,0 +1,33 @@
+{
+  "status": "running",
+  "startedAt": "some date",
+  "baseUrl": "https://prod.danawa.com/list/?cate=",
+  "cpu": {
+    "minimumDate": "2018",
+    "ignoreWords": ["채굴", "마이닝", "중고"],
+    "filters": ["#searchAttributeValueRep748297", "..."],
+    "categoryNumber": "112747"
+  },
+  "mainboard": {
+    "minimumDate": "2015",
+    "filters": ["...", "..."],
+    "categoryNumber": "..."
+  },
+  "memory": {
+    "categoryNumber": "..."
+  },
+
+  "categories": ["cpu", "mainboard", "memory"],
+  "pages:cpu": [1, 2],
+  "pages:mainboard": [1],
+  "pages:memory": [1, 2, 3, 4],
+
+  "pendingPages": ["cpu", "mainboard", "memory"],
+  "pendingPages:cpu": [1, 2, 3],
+  "pendingPages:mainboard": [1],
+  "pendingPages:memory": [1, 2],
+
+  "pendingItems": ["cpu", "mainboard"],
+  "pendingItems:cpu": ["somep code", "#2", "#3"],
+  "pendingItems:mainboard": ["#1", "#2", "#3"]
+}
