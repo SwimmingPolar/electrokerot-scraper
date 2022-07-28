@@ -48,11 +48,15 @@ export async function getLastPage({
     await initiateBrowser()
   }
   const page = await browser.newPage()
+
   try {
     /**
      * GOTO the target page
      */
-    await page.goto(`${baseUrl}${categoryNumber}`)
+    await page.goto(`${baseUrl}${categoryNumber}`, {
+      timeout: 180000,
+      waitUntil: 'networkidle0'
+    })
 
     /**
      * APPLY optional filters
@@ -63,12 +67,11 @@ export async function getLastPage({
       await page.waitForSelector(
         '#frmProductList > div.option_nav > div.nav_header > div.head_opt > button'
       )
-      await Promise.all([
-        page.click(
-          '#frmProductList > div.option_nav > div.nav_header > div.head_opt > button'
-        ),
-        page.waitForSelector('#extendSearchOptionpriceCompare')
-      ])
+      await page.click(
+        '#frmProductList > div.option_nav > div.nav_header > div.head_opt > button'
+      )
+      await page.waitForSelector('#extendSearchOptionpriceCompare')
+
       await page.setOfflineMode(true)
       filters.forEach(async (filter, index) => {
         // re-establish network connection
@@ -87,7 +90,10 @@ export async function getLastPage({
      * SHOW 90 items per page
      */
     await page.waitForSelector(
-      '#productListArea > div.prod_list_opts > div.view_opt > div.view_item.view_qnt > select'
+      '#productListArea > div.prod_list_opts > div.view_opt > div.view_item.view_qnt > select',
+      {
+        timeout: 180000
+      }
     )
     await page.select(
       '#productListArea > div.prod_list_opts > div.view_opt > div.view_item.view_qnt > select',
@@ -119,7 +125,9 @@ export async function getLastPage({
 
       // wait for the next page to load if there is one
       if (IsNextPageAvailable) {
-        await page.waitForSelector(contentSelector)
+        await page.waitForSelector(contentSelector, {
+          timeout: 180000
+        })
       }
 
       // each tab/page will wait for 0~3 seconds to avoid too many requests
@@ -140,7 +148,9 @@ export async function getLastPage({
     }, contentSelector)
 
     // wait for the last page to load
-    await page.waitForSelector(contentSelector)
+    await page.waitForSelector(contentSelector, {
+      timeout: 180000
+    })
 
     const itemsLengthInLastPage = await page.evaluate(() => {
       return (

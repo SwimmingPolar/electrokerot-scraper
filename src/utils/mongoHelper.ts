@@ -1,10 +1,10 @@
 import { MongoClient, Db } from 'mongodb'
-import log from 'utils/logger'
+import log from './logger'
 
 let mongoClient: MongoClient
 let db: Db
 
-export default async function initiateMongoClient() {
+export async function initiateMongoClient() {
   try {
     const { MONGODB_URL = '' } = process.env
     mongoClient = await new MongoClient(MONGODB_URL).connect()

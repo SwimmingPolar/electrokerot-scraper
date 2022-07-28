@@ -1,5 +1,5 @@
 import dotenv from 'dotenv'
-if (process.env.NODE_ENV === 'development') {
+if (process.env.NODE_ENV?.trim() === 'development') {
   dotenv.config({
     path: 'config/dev.env'
   })
@@ -7,6 +7,7 @@ if (process.env.NODE_ENV === 'development') {
 import fs from 'fs'
 import fetch from 'node-fetch'
 import { add, formatDistanceToNow } from 'date-fns'
+import { WatchError } from 'redis'
 // user defined
 import {
   parseConfig,
@@ -15,13 +16,13 @@ import {
   retry,
   RedisHelper,
   MongoHelper
-} from 'utils'
+} from './utils'
 // types
-import { WatchError } from 'redis'
-import { CategoryMeta } from './utils/parseConfig'
+import { CategoryMeta } from './utils/parseConfig.js'
 
 // ignore prettier
 ;(async () => {
+  await MongoHelper.initiateMongoClient()
   const client = await RedisHelper.getRedisClient()
 
   // check scraper status
@@ -131,6 +132,7 @@ import { CategoryMeta } from './utils/parseConfig'
     await waitForPendingWork('Pages')
   } catch (error) {
     log.error('ScrapPages', error + '')
+    process.exit(1)
   }
 
   /**
@@ -206,6 +208,7 @@ import { CategoryMeta } from './utils/parseConfig'
     }
   } catch (error) {
     log.error('ScrapItems', error + '')
+    process.exit(1)
   }
 
   // exit the program
@@ -213,6 +216,8 @@ import { CategoryMeta } from './utils/parseConfig'
   // indicating that the scraper is ready to start again on next restart
   await client.SET('status', 'done')
   log.info('Scraper is done and exiting')
+  // exit the program without error
+  process.exit(0)
 })()
 
 // register to pending work
@@ -274,19 +279,19 @@ async function markIsUpdating(category: string, pcodes: string[]) {
 // wait for pending work
 async function waitForPendingWork(pendingWorkTypePrefix: string) {
   const client = await RedisHelper.getRedisClient()
-  return retry(function () {
-    return new Promise<void>((resolve, reject) => {
-      ;(async () => {
-        const pendingWork =
-          (await client.SMEMBERS(`pending${pendingWorkTypePrefix}`)) || []
-        if (pendingWork.length === 0) {
-          resolve()
-        } else {
-          setTimeout(reject, 500)
-        }
-      })()
-    })
-  })()
+  const pendingWorksCategories =
+    (await client.KEYS(`pending:${pendingWorkTypePrefix}:*`)) ||
+    ([] as string[])
+  const multi = client.multi()
+  pendingWorksCategories.forEach(pendingWork => multi.SMEMBERS(pendingWork))
+  const pendingWorks = ((await multi.exec()) as string[][]) || []
+  const totalPendingWorks = pendingWorks.reduce(
+    (acc, pendingWork) => acc + pendingWork.length,
+    0
+  )
+  // request takes about 1 minute to complete in tor network
+  // so wait for 62.5 seconds per request to be sure that all pending works are done
+  return new Promise(resolve => setTimeout(resolve, 62500 * totalPendingWorks))
 }
 
 function sendRequest(url: string, body: Record<string, unknown>) {
@@ -342,8 +347,12 @@ async function getRandomItems(collection: Collection) {
 async function estimateTimeToCompletion() {
   const client = await RedisHelper.getRedisClient()
   const db = await MongoHelper.getDb()
-  const remainingRequestsHistory: number[] = []
+  const processedRequestsHistory: number[] = []
   const INTERVAL = 3000
+  const lastProcessedRequests = {
+    items: 0,
+    pages: 0
+  }
 
   async function getRemainingPages() {
     // remaining pages
@@ -394,26 +403,31 @@ async function estimateTimeToCompletion() {
     const totalPages = await getRemainingPages()
     const totalItems = await getRemainingItems()
 
-    remainingRequestsHistory.push(totalPages + totalItems)
-
     // start timer
     setInterval(async () => {
       const remainingPages = await getRemainingPages()
       const remainingItems = await getRemainingItems()
       const remainingRequests = remainingPages + remainingItems
 
-      remainingRequestsHistory.push(remainingRequests)
-      // maintain history of remaining requests to 1000
-      if (remainingRequestsHistory.length >= 1000) {
-        remainingRequestsHistory.shift()
-      }
+      const [itemsUpdated = 0, pagesUpdated = 0] = (await client
+        .multi()
+        .GET('updateCount:Items')
+        .GET('updateCount:Pages')
+        .exec()) as [number, number]
+
+      const requestsProcessed =
+        +itemsUpdated -
+        lastProcessedRequests.items +
+        (+pagesUpdated - lastProcessedRequests.pages)
+
+      processedRequestsHistory.push(requestsProcessed)
+
+      lastProcessedRequests.items = +itemsUpdated
+      lastProcessedRequests.pages = +pagesUpdated
 
       const averageProcessedRequestsPerInterval =
-        remainingRequestsHistory
-          .map((_, i, arr) => arr[i - 1] - arr[i])
-          .filter(e => e)
-          .reduce((prev, cur) => prev + cur, 0) /
-        (remainingRequestsHistory.length - 1)
+        processedRequestsHistory.reduce((prev, cur) => prev + cur, 0) /
+        processedRequestsHistory.length
 
       const averageRequestsPerSecond =
         averageProcessedRequestsPerInterval / (INTERVAL / 1000)
@@ -435,7 +449,7 @@ async function estimateTimeToCompletion() {
           'Estimated time to completion: ',
           `${formatDistanceToNow(
             estimatedCompletionTime
-          )} (avg. ${averageRequestsPerSecond} requests/s)`
+          )} (avg. ${averageRequestsPerSecond.toFixed(3)} requests/s)`
         )
       }
     }, INTERVAL)
