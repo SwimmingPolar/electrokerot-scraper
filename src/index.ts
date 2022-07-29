@@ -32,8 +32,13 @@ import { CategoryMeta } from './utils/parseConfig.js'
     process.exit(0)
   }
   if (status !== 'running') {
-    await parseConfig()
-    await client.SET('status', 'running')
+    try {
+      await parseConfig()
+      await client.SET('status', 'running')
+    } catch (error) {
+      log.error('ScraperMain', 'Error parsing config: ' + error)
+      process.exit(1)
+    }
   }
 
   // base urls for scraping pages and items
@@ -53,7 +58,7 @@ import { CategoryMeta } from './utils/parseConfig.js'
   try {
     await handlePending()
   } catch (error) {
-    log.error('HandlePending', error + '')
+    log.error('ScraperMain', 'Error handling pending works' + error)
   }
 
   // start estimating time to completion
@@ -131,7 +136,7 @@ import { CategoryMeta } from './utils/parseConfig.js'
      */
     await waitForPendingWork('Pages')
   } catch (error) {
-    log.error('ScrapPages', error + '')
+    log.error('ScraperMain', 'Error parsing pages' + error)
     process.exit(1)
   }
 
@@ -207,7 +212,7 @@ import { CategoryMeta } from './utils/parseConfig.js'
       await collection.updateMany({}, { $set: { isUpdating: false } })
     }
   } catch (error) {
-    log.error('ScrapItems', error + '')
+    log.error('ScraperMain', 'Error updating items' + error)
     process.exit(1)
   }
 

@@ -11,6 +11,11 @@ puppeteer.use(AdblockerPlugin({ blockTrackers: true })).use(StealthPlugin())
 export default async function initiateBrowser() {
   // execution context
   const isProduction = process.env.NODE_ENV === 'production'
+  const proxy = process.env.HTTP_PROXY
+  const args = ['--disable-dev-shm-usage', '--no-sandbox']
+  if (isProduction && proxy) {
+    args.push(`--proxy-server=${proxy}`)
+  }
   // different config for execution context
   const puppeteerConfig = {
     defaultViewport: null,
@@ -18,7 +23,7 @@ export default async function initiateBrowser() {
     executablePath: isProduction
       ? process.env.PUPPETEER_EXECUTABLE_PATH
       : puppeteer.executablePath(),
-    args: ['--disable-dev-shm-usage', '--no-sandbox']
+    args
   }
 
   if (!browser) {
@@ -54,8 +59,8 @@ export async function getLastPage({
      * GOTO the target page
      */
     await page.goto(`${baseUrl}${categoryNumber}`, {
-      timeout: 180000,
-      waitUntil: 'networkidle0'
+      timeout: 120000,
+      waitUntil: 'networkidle2'
     })
 
     /**
@@ -65,13 +70,18 @@ export async function getLastPage({
     if (filters && filters.length > 0) {
       // open filters
       await page.waitForSelector(
-        '#frmProductList > div.option_nav > div.nav_header > div.head_opt > button'
+        '#frmProductList > div.option_nav > div.nav_header > div.head_opt > button',
+        {
+          timeout: 120000
+        }
       )
       await page.click(
         '#frmProductList > div.option_nav > div.nav_header > div.head_opt > button'
       )
-      await page.waitForSelector('#extendSearchOptionpriceCompare')
-
+      await page.waitForSelector('#extendSearchOptionpriceCompare', {
+        timeout: 120000
+      })
+      // disconnect network to prevent redundant http requests
       await page.setOfflineMode(true)
       filters.forEach(async (filter, index) => {
         // re-establish network connection
@@ -92,7 +102,7 @@ export async function getLastPage({
     await page.waitForSelector(
       '#productListArea > div.prod_list_opts > div.view_opt > div.view_item.view_qnt > select',
       {
-        timeout: 180000
+        timeout: 120000
       }
     )
     await page.select(
@@ -126,7 +136,7 @@ export async function getLastPage({
       // wait for the next page to load if there is one
       if (IsNextPageAvailable) {
         await page.waitForSelector(contentSelector, {
-          timeout: 180000
+          timeout: 120000
         })
       }
 
@@ -149,7 +159,7 @@ export async function getLastPage({
 
     // wait for the last page to load
     await page.waitForSelector(contentSelector, {
-      timeout: 180000
+      timeout: 120000
     })
 
     const itemsLengthInLastPage = await page.evaluate(() => {
