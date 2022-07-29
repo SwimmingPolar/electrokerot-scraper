@@ -3,6 +3,7 @@ import puppeteer from 'puppeteer-extra'
 import AdblockerPlugin from 'puppeteer-extra-plugin-adblocker'
 import StealthPlugin from 'puppeteer-extra-plugin-stealth'
 import log from './logger'
+import randomUserAgent from './randomUserAgent'
 
 let browser: Browser
 
@@ -55,6 +56,7 @@ export async function getLastPage({
   const page = await browser.newPage()
 
   try {
+    await page.setUserAgent(randomUserAgent())
     /**
      * GOTO the target page
      */

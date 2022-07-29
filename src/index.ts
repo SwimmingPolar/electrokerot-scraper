@@ -5,8 +5,6 @@ if (process.env.NODE_ENV?.trim() === 'development') {
   })
 }
 import fs from 'fs'
-import fetch from 'node-fetch'
-import { add, formatDistanceToNow } from 'date-fns'
 import { WatchError } from 'redis'
 // user defined
 import {
@@ -15,13 +13,21 @@ import {
   log,
   retry,
   RedisHelper,
-  MongoHelper
+  MongoHelper,
+  checkProxyStatus,
+  estimateTimeToCompletion,
+  waitForPendingWork
 } from './utils'
 // types
 import { CategoryMeta } from './utils/parseConfig.js'
 
 // ignore prettier
 ;(async () => {
+  // check proxy status before start under production mode
+  if (process.env.NODE_ENV?.trim() === 'production') {
+    await checkProxyStatus()
+  }
+
   await MongoHelper.initiateMongoClient()
   const client = await RedisHelper.getRedisClient()
 
@@ -281,24 +287,6 @@ async function markIsUpdating(category: string, pcodes: string[]) {
   await collection.bulkWrite(queries)
 }
 
-// wait for pending work
-async function waitForPendingWork(pendingWorkTypePrefix: string) {
-  const client = await RedisHelper.getRedisClient()
-  const pendingWorksCategories =
-    (await client.KEYS(`pending:${pendingWorkTypePrefix}:*`)) ||
-    ([] as string[])
-  const multi = client.multi()
-  pendingWorksCategories.forEach(pendingWork => multi.SMEMBERS(pendingWork))
-  const pendingWorks = ((await multi.exec()) as string[][]) || []
-  const totalPendingWorks = pendingWorks.reduce(
-    (acc, pendingWork) => acc + pendingWork.length,
-    0
-  )
-  // request takes about 1 minute to complete in tor network
-  // so wait for 62.5 seconds per request to be sure that all pending works are done
-  return new Promise(resolve => setTimeout(resolve, 62500 * totalPendingWorks))
-}
-
 function sendRequest(url: string, body: Record<string, unknown>) {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   return new Promise<void>((resolve, _) => {
@@ -347,119 +335,4 @@ async function getRandomItems(collection: Collection) {
         .toArray()) as { pcode: string }[]
     )?.map(({ pcode }) => pcode) || []
   )
-}
-
-async function estimateTimeToCompletion() {
-  const client = await RedisHelper.getRedisClient()
-  const db = await MongoHelper.getDb()
-  const processedRequestsHistory: number[] = []
-  const INTERVAL = 3000
-  const lastProcessedRequests = {
-    items: 0,
-    pages: 0
-  }
-
-  async function getRemainingPages() {
-    // remaining pages
-    const pages = await client.SMEMBERS('categories')
-    const pendingPages = await client.SMEMBERS('pendingPages')
-    const multi = client.multi()
-    pages.forEach(page => multi.SMEMBERS(`pages:${page}`))
-    pendingPages.forEach(pendingPage =>
-      multi.SMEMBERS(`pendingPages:${pendingPage}`)
-    )
-    const results = (await multi.exec()) as string[][]
-    const remainingPages = results.reduce(
-      (totalPages, page) => totalPages + page.length,
-      0
-    )
-    return remainingPages
-  }
-  async function getRemainingItems() {
-    const { CONFIG_FILE_PATH = 'config/scrapConfig.json' } = process.env
-    const configFile = fs.readFileSync(CONFIG_FILE_PATH, {
-      encoding: 'utf8'
-    })
-    const { itemsCategories = [] } = JSON.parse(configFile) as {
-      itemsCategories: string[]
-    }
-
-    let remainingItems = 0
-    for await (const category of itemsCategories) {
-      // pending items in redis
-      const pendingItems =
-        (await client.SMEMBERS(`pendingItems:${category}`)) || []
-      // items to be updated in db
-      const collection = db.collection(category)
-
-      remainingItems +=
-        pendingItems.length +
-          (await collection.count({
-            isUpdating: false,
-            updatedAt: {
-              $lt: new Date(new Date().setHours(13, 0, 0))
-            }
-          })) || 0
-    }
-    return remainingItems
-  }
-
-  async function init() {
-    const totalPages = await getRemainingPages()
-    const totalItems = await getRemainingItems()
-
-    // start timer
-    setInterval(async () => {
-      const remainingPages = await getRemainingPages()
-      const remainingItems = await getRemainingItems()
-      const remainingRequests = remainingPages + remainingItems
-
-      const [itemsUpdated = 0, pagesUpdated = 0] = (await client
-        .multi()
-        .GET('updateCount:Items')
-        .GET('updateCount:Pages')
-        .exec()) as [number, number]
-
-      const requestsProcessed =
-        +itemsUpdated -
-        lastProcessedRequests.items +
-        (+pagesUpdated - lastProcessedRequests.pages)
-
-      processedRequestsHistory.push(requestsProcessed)
-
-      lastProcessedRequests.items = +itemsUpdated
-      lastProcessedRequests.pages = +pagesUpdated
-
-      const averageProcessedRequestsPerInterval =
-        processedRequestsHistory.reduce((prev, cur) => prev + cur, 0) /
-        processedRequestsHistory.length
-
-      const averageRequestsPerSecond =
-        averageProcessedRequestsPerInterval / (INTERVAL / 1000)
-      const estimatedTimeToCompletionInSeconds = Math.round(
-        remainingRequests / averageRequestsPerSecond
-      )
-
-      if (Number.isInteger(estimatedTimeToCompletionInSeconds)) {
-        const estimatedCompletionTime = add(new Date(), {
-          seconds: estimatedTimeToCompletionInSeconds
-        })
-
-        process.stdout.write('\u001b[3J\u001b[2J\u001b[1J')
-        console.clear()
-        log.info('Total pages to scrap: ', `${remainingPages}/${totalPages}`)
-        log.info('Total items to update: ', `${remainingItems}/${totalItems}`)
-        log.info(
-          // go up a line / clear current line
-          'Estimated time to completion: ',
-          `${formatDistanceToNow(
-            estimatedCompletionTime
-          )} (avg. ${averageRequestsPerSecond.toFixed(3)} requests/s)`
-        )
-      }
-    }, INTERVAL)
-  }
-
-  log.info('Estimating time to completion...')
-  init()
 }
