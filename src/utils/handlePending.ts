@@ -5,15 +5,15 @@ export default async function () {
   const client = await getRedisClient()
 
   // get pending categories and delete them from redis
-  const [pendingCategories] =
+  const [pendingPagesCategories] =
     ((await client
       .multi()
-      .SMEMBERS('pendingCategories')
-      .DEL('pendingCategories')
+      .SMEMBERS('pendingPages')
+      .DEL('pendingPages')
       .exec()) as [string[]]) || []
 
   // add pending pages to each category
-  pendingCategories.forEach(async category => {
+  pendingPagesCategories.forEach(async category => {
     const [pendingPages] = (await client
       .multi()
       .SMEMBERS(`pendingPages:${category}`)
@@ -31,8 +31,8 @@ export default async function () {
   const [pendingItemsCategories] =
     ((await client
       .multi()
-      .SMEMBERS('pendingItemsCategories')
-      .DEL('pendingItemsCategories')
+      .SMEMBERS('pendingItems')
+      .DEL('pendingItems')
       .exec()) as [string[]]) || []
 
   // reset isUpdating to false for each item
@@ -50,7 +50,8 @@ export default async function () {
       pendingItems.map(item => ({
         updateOne: {
           filter: {
-            _id: item
+            _id: item,
+            isUpdating: true
           },
           update: {
             $set: {
