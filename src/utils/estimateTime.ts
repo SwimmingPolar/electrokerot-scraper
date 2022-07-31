@@ -6,15 +6,13 @@ import * as MongoHelper from './mongoHelper'
 import log from './logger'
 
 // get all categories
-const { CONFIG_FILE_PATH = '../../config/scrapConfig.json' } = process.env
+const { CONFIG_FILE_PATH = 'config/scrapConfig.json' } = process.env
 const configFile = fs.readFileSync(CONFIG_FILE_PATH, {
   encoding: 'utf8'
 })
 const { itemsCategories = [] } = JSON.parse(configFile) as {
   itemsCategories: string[]
 }
-
-let averageSpeed = 0
 
 export async function estimateTimeToCompletion() {
   const client = await RedisHelper.getRedisClient()
@@ -58,7 +56,7 @@ export async function estimateTimeToCompletion() {
       // combine both
       remainingItems +=
         pendingItems.length +
-          (await collection.count({
+          (await collection.countDocuments({
             isUpdating: false,
             updatedAt: {
               $lt: new Date(new Date().setHours(13, 0, 0))
@@ -104,6 +102,13 @@ export async function estimateTimeToCompletion() {
         (+pagesUpdated - lastProcessedRequests.pages)
 
       processedRequestsHistory.push(requestsProcessed)
+      // scraping a given request takes about 1.75 minute (105 seconds)
+      // updater can hold max 10 requests to items
+      // so, it takes at least 1050 seconds to get accurate avg speed
+      // 1050 seconds / 3 seconds interval = 350 max histories
+      if (processedRequestsHistory.length >= 350) {
+        processedRequestsHistory.shift()
+      }
 
       lastProcessedRequests.items = +itemsUpdated
       lastProcessedRequests.pages = +pagesUpdated
@@ -119,8 +124,6 @@ export async function estimateTimeToCompletion() {
       )
 
       if (Number.isInteger(estimatedTimeToCompletionInSeconds)) {
-        // if average speed is integer, save for later use
-        averageSpeed = averageRequestsPerSecond
         const estimatedCompletionTime = add(new Date(), {
           seconds: estimatedTimeToCompletionInSeconds
         })
@@ -156,8 +159,8 @@ export async function waitForPendingWork(pendingWorkTypePrefix: string) {
     (acc, pendingWork) => acc + pendingWork.length,
     0
   )
-  // roughly wait for pending works to prevent infinite loop
+  // roughly wait for pending works to prevent infinite loop (1.75: just enough padding)
   return new Promise(resolve =>
-    setTimeout(resolve, Math.ceil(totalPendingWorks / averageSpeed) * 1000)
+    setTimeout(resolve, Math.ceil(totalPendingWorks * 1.75 * 1000))
   )
 }

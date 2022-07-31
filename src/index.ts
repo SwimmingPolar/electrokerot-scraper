@@ -6,6 +6,7 @@ if (process.env.NODE_ENV?.trim() === 'development') {
 }
 import fs from 'fs'
 import { WatchError } from 'redis'
+import fetch from 'node-fetch'
 // user defined
 import {
   parseConfig,
@@ -160,12 +161,12 @@ import { CategoryMeta } from './utils/parseConfig.js'
     }
     const itemsCategoriesBackup = [...itemsCategories]
 
-    // if there is no items categories to scrap, exit
     const db = await MongoHelper.getDb()
 
     // return random category from given categories
     const getRandom = (categories: string[]) =>
       categories[Math.floor(Math.random() * categories.length)] || undefined
+    // if there is no items categories to scrap, exit
     while (itemsCategories.length > 0) {
       // get random category
       const category = getRandom(itemsCategories)
@@ -263,7 +264,7 @@ async function registerPendingWork(
           if (error instanceof WatchError) {
             reject()
           } else {
-            log.error('Scrapper Main', 'Registering pending work: ' + error)
+            log.error('ScrapperMain', 'Registering pending work: ' + error)
           }
         }
       })()
@@ -296,16 +297,12 @@ function sendRequest(url: string, body: Record<string, unknown>) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       }).then(async response => {
-        const status = response.status
         const result = (await response.json()) as { keepGoing: boolean }
 
-        /**
-         * KeepGoing: false - server is busy, then try again
-         */
-        if (status === 503 && result.keepGoing === false) {
-          setTimeout(request, 0)
-        } else {
+        if (result.keepGoing === true) {
           resolve()
+        } else {
+          setTimeout(request, 0)
         }
       })
     })()
@@ -323,14 +320,16 @@ async function getRandomItems(collection: Collection) {
               isUpdating: false,
               // updating starts at 13:00 and items that have
               // updatedAt time pass 13:00 are considered scraped
-              updatedAt: { $lt: new Date(new Date().setHours(13, 0, 0)) }
+              updatedAt: {
+                $lt: new Date(new Date().setHours(13, 0, 0, 0))
+              }
             }
           },
-          { $project: { pcode: 1 } },
-          // limit items total to 5~10
           {
+            // limit items total to 5~10
             $limit: Math.ceil(Math.random() * 5 + 5)
-          }
+          },
+          { $project: { pcode: 1 } }
         ])
         .toArray()) as { pcode: string }[]
     )?.map(({ pcode }) => pcode) || []
