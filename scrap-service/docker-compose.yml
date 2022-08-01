@@ -1,0 +1,65 @@
+version: "3.7"
+services:
+  tor:
+    image: dperson/torproxy
+    networks:
+      - electrokerot-scraper-network
+    deploy:
+      replicas: 10
+      restart_policy:
+        condition: any
+    environment:
+      TOR_NewCircuitPeriod: 30
+      TOR_MaxCircuitDirtiness: 30
+  redis:
+    image: redis
+    volumes:
+      - electrokerot-redis:/data
+    networks:
+      - electrokerot-scraper-network
+    command: redis-server --requirepass electrokerot --save 30 1 --loglevel warning
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: none
+  scraper:
+    image: 127.0.0.1:5000/scraper:latest
+    build:
+      context: ../../electrokerot-scraper/.
+    env_file:
+      - ./config/scraper/.env
+    networks:
+      - electrokerot-scraper-network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+  updater:
+    image: 127.0.0.1:5000/updater:latest
+    build:
+      context: ../../electrokerot-msa-db-updater/.
+    env_file:
+      - ./config/updater/.env
+    networks:
+      - electrokerot-scraper-network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+  crawler:
+    image: 127.0.0.1:5000/crawler:latest
+    build:
+      context: ../../electrokerot-crawler/.
+    env_file:
+      - ./config/crawler/.env
+    networks:
+      - electrokerot-scraper-network
+    deploy:
+      replicas: 10
+      restart_policy:
+        condition: any
+volumes:
+  electrokerot-redis:
+    external: true
+networks:
+  electrokerot-scraper-network:
