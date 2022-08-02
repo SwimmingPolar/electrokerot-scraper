@@ -43,7 +43,7 @@ Updater의 수가 많을 수록 업데이트 속도가 빨라지지만, Crawler�
 
 MongoDB와 Redis가 설치되어 있어야 한다. Scraper, Updater, Crawler 실행 순서는 상관 없다.
 
-`npm run start`
+`npm install && npm run start`
 
 Redis의 경우, 보안 취약점 때문에 기본적인 패스워드가 없을 경우, 실행 후 단시간 내 멀웨어에 감염되기 때문에 패스워드 보안을 설정해야 한다.
 
