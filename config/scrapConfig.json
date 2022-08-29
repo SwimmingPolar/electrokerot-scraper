@@ -5,7 +5,7 @@
   "ignoreWords": ["채굴", "마이닝", "중고"],
   "itemsCategories": [
     "cpu",
-    "mainboard",
+    "motherboard",
     "memory",
     "graphics",
     "hdd",
@@ -34,7 +34,7 @@
       ]
     },
     {
-      "category": "mainboard",
+      "category": "motherboard",
       "categoryNumber": "112751",
       "start": "1",
       "end": "*",

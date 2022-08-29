@@ -1,36 +1,31 @@
 import dotenv from 'dotenv'
+import fs from 'fs'
+import fetch from 'node-fetch'
+import { WatchError } from 'redis'
+import {
+  CategoryMeta,
+  checkProxyStatus,
+  configParser,
+  estimateTimeToCompletion,
+  getDb,
+  getRedisClient,
+  initiateMongoClient,
+  pendingCleaner
+} from './helper'
+import { log, retry, sleep } from './utils'
 if (process.env.NODE_ENV?.trim() === 'development') {
   dotenv.config({
     path: 'config/dev.env'
   })
 }
-import fs from 'fs'
-import { WatchError } from 'redis'
-import fetch from 'node-fetch'
-// user defined
-import {
-  parseConfig,
-  handlePending,
-  log,
-  retry,
-  RedisHelper,
-  MongoHelper,
-  checkProxyStatus,
-  estimateTimeToCompletion,
-  waitForPendingWork
-} from './utils'
-// types
-import { CategoryMeta } from './utils/parseConfig.js'
-
-// ignore prettier
 ;(async () => {
   // check proxy status before start under production mode
   if (process.env.NODE_ENV?.trim() === 'production') {
     await checkProxyStatus()
   }
 
-  await MongoHelper.initiateMongoClient()
-  const client = await RedisHelper.getRedisClient()
+  await initiateMongoClient()
+  const client = await getRedisClient()
 
   // check scraper status
   const status = await client.GET('status')
@@ -40,7 +35,7 @@ import { CategoryMeta } from './utils/parseConfig.js'
   }
   if (status !== 'running') {
     try {
-      await parseConfig()
+      await configParser()
       await client.SET('status', 'running')
     } catch (error) {
       log.error('ScraperMain', 'Error parsing config: ' + error)
@@ -63,9 +58,9 @@ import { CategoryMeta } from './utils/parseConfig.js'
    * Move pending work to current work bench
    */
   try {
-    await handlePending()
+    await pendingCleaner()
   } catch (error) {
-    log.error('ScraperMain', 'Error handling pending works' + error)
+    log.error('ScraperMain', 'Error handling pending works: ' + error)
   }
 
   // start estimating time to completion
@@ -80,7 +75,7 @@ import { CategoryMeta } from './utils/parseConfig.js'
       /**
        * Check if there are categories to parse
        */
-      const categories = await client.SMEMBERS('categories')
+      const categories: string[] = await client.SMEMBERS('categories')
       categoriesLength = categories.length
 
       // if there is no categories left to scrap, move on to next stage
@@ -118,7 +113,6 @@ import { CategoryMeta } from './utils/parseConfig.js'
 
       /**
        * Register pending pages to redis
-       * to know when the current pages are scraped
        */
       await registerPendingWork('Pages', category, pages)
 
@@ -136,6 +130,7 @@ import { CategoryMeta } from './utils/parseConfig.js'
         ignoreWords,
         filters
       })
+      await sleep(1000)
     } while (categoriesLength > 0)
 
     /**
@@ -159,9 +154,6 @@ import { CategoryMeta } from './utils/parseConfig.js'
     const { itemsCategories = [] } = JSON.parse(configFile) as {
       itemsCategories: string[]
     }
-    const itemsCategoriesBackup = [...itemsCategories]
-
-    const db = await MongoHelper.getDb()
 
     // return random category from given categories
     const getRandom = (categories: string[]) =>
@@ -170,7 +162,7 @@ import { CategoryMeta } from './utils/parseConfig.js'
     while (itemsCategories.length > 0) {
       // get random category
       const category = getRandom(itemsCategories)
-      // if category is not set, it means there is no categories to scrap
+      // if category is undefined, it means there is no categories to scrap
       if (!category) {
         break
       }
@@ -179,10 +171,9 @@ import { CategoryMeta } from './utils/parseConfig.js'
        * Get 5 < n < 10 items from random category which are not
        * currently updating and are not scraped yet
        */
-      const collection = db.collection(category)
-      const pcodes = await getRandomItems(collection)
+      const pcodes = await getRandomItems(category)
 
-      // if there is no items to scrap, remove category from itemsCategories
+      // if there is no items to scrap, remove the category from itemsCategories
       if (pcodes.length === 0) {
         itemsCategories.splice(itemsCategories.indexOf(category), 1)
         continue
@@ -204,6 +195,8 @@ import { CategoryMeta } from './utils/parseConfig.js'
        */
       await registerPendingWork('Items', category, pcodes)
       await markIsUpdating(category, pcodes)
+
+      await sleep(1500)
     }
 
     /**
@@ -214,10 +207,8 @@ import { CategoryMeta } from './utils/parseConfig.js'
     /**
      * mark all items as scraped (isUpdating: false)
      */
-    for await (const itemCategory of itemsCategoriesBackup) {
-      const collection = db.collection(itemCategory)
-      await collection.updateMany({}, { $set: { isUpdating: false } })
-    }
+    const db = await getDb()
+    await db.collection('parts').updateMany({}, { $set: { isUpdating: false } })
   } catch (error) {
     log.error('ScraperMain', 'Error updating items' + error)
     process.exit(1)
@@ -243,7 +234,7 @@ async function registerPendingWork(
   works: string[]
 ): Promise<void> {
   // get redis client
-  const client = await RedisHelper.getRedisClient()
+  const client = await getRedisClient()
   return retry(function () {
     return new Promise<void>((resolve, reject) => {
       ;(async () => {
@@ -271,10 +262,52 @@ async function registerPendingWork(
     })
   })()
 }
+// wait for pending work
+export async function waitForPendingWork(pendingWorkTypePrefix: string) {
+  const client = await getRedisClient()
+  const pendingWorksCategories =
+    (await client.KEYS(`pending${pendingWorkTypePrefix}:*`)) || ([] as string[])
+  const multi = client.multi()
+  pendingWorksCategories.forEach(pendingWork => multi.SMEMBERS(pendingWork))
+  const pendingWorks = ((await multi.exec()) as string[][]) || []
+  const totalPendingWorks = pendingWorks.reduce(
+    (acc, pendingWork) => acc + pendingWork.length,
+    0
+  )
+
+  // number of random 'items' to be scraped per request (3 ~ 6 per request)
+  const maximumItemsToScrapPerRequest = 6
+  // scale updater instance from 1 to 3
+  const updaterInstance = 4
+  const updaterInstanceRequestLimit = 10
+  // scale crawler instance from 10 to 30
+  const crawlerInstance = 35
+  const crawlerInstanceRequestLimit = 7
+  const torProxiedRequestProcessingTimeInMs = 1.75 * 60 * 1000
+
+  const maximumItemsToProcess =
+    maximumItemsToScrapPerRequest *
+    updaterInstance *
+    updaterInstanceRequestLimit
+
+  // processing capacity is the number of items that can be processed in parallel
+  const processingCapacity =
+    (crawlerInstance * crawlerInstanceRequestLimit) / maximumItemsToProcess
+
+  const timeToBeWaited = Math.ceil(
+    (totalPendingWorks / maximumItemsToProcess / processingCapacity) *
+      torProxiedRequestProcessingTimeInMs
+  )
+
+  // roughly wait for pending works to prevent loop
+  return new Promise(resolve => {
+    setTimeout(resolve, timeToBeWaited)
+  })
+}
 
 async function markIsUpdating(category: string, pcodes: string[]) {
-  const db = await MongoHelper.getDb()
-  const collection = db.collection(category)
+  const db = await getDb()
+  const collection = db.collection('parts')
 
   const queries = pcodes.map(pcode => ({
     updateOne: {
@@ -302,21 +335,24 @@ function sendRequest(url: string, body: Record<string, unknown>) {
         if (result.keepGoing === true) {
           resolve()
         } else {
-          setTimeout(request, 0)
+          setTimeout(request, 50)
         }
       })
     })()
   })
 }
 
-import { Collection } from 'mongodb'
-async function getRandomItems(collection: Collection) {
+async function getRandomItems(category: string) {
+  const db = await getDb()
+  const collection = db.collection('parts')
+
   return (
     (
       (await collection
         .aggregate([
           {
             $match: {
+              category,
               isUpdating: false,
               // updating starts at 13:00 and items that have
               // updatedAt time pass 13:00 are considered scraped
@@ -326,8 +362,8 @@ async function getRandomItems(collection: Collection) {
             }
           },
           {
-            // limit items total to 5~10
-            $limit: Math.ceil(Math.random() * 5 + 5)
+            // limit items total to 3~5
+            $limit: Math.floor(Math.random() * 3 + 3)
           },
           { $project: { pcode: 1 } }
         ])

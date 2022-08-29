@@ -5,7 +5,7 @@ services:
     networks:
       - electrokerot-scraper-network
     deploy:
-      replicas: 10
+      replicas: 6
       restart_policy:
         condition: any
     environment:
@@ -43,7 +43,7 @@ services:
     networks:
       - electrokerot-scraper-network
     deploy:
-      replicas: 1
+      replicas: 5
       restart_policy:
         condition: any
   crawler:

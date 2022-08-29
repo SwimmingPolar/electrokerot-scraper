@@ -1,9 +1,8 @@
-import { getRedisClient } from './redisHelper'
-import { getDb } from './mongoHelper'
+import { AnyBulkWriteOperation } from 'mongodb'
+import { getDb, getRedisClient } from '../helper'
 
-export default async function () {
+export async function pendingCleaner() {
   const client = await getRedisClient()
-
   // get pending categories and delete them from redis
   const [pendingPagesCategories] =
     ((await client
@@ -37,17 +36,19 @@ export default async function () {
 
   // reset isUpdating to false for each item
   const db = await getDb()
+  const collection = db.collection('parts')
+  const query = [] as AnyBulkWriteOperation[]
   pendingItemsCategories.forEach(async category => {
-    const collection = db.collection(category)
-
+    // delete pending items from redis
     const [pendingItems] = (await client
       .multi()
       .SMEMBERS(`pendingItems:${category}`)
       .DEL(`pendingItems:${category}`)
       .exec()) as [string[]]
 
-    await collection.bulkWrite(
-      pendingItems.map(item => ({
+    // push query string which will reset isUpdating to false for each item
+    query.push(
+      ...pendingItems.map(item => ({
         updateOne: {
           filter: {
             _id: item,
@@ -62,4 +63,8 @@ export default async function () {
       }))
     )
   })
+  // execute query
+  if (query.length !== 0) {
+    await collection.bulkWrite(query)
+  }
 }

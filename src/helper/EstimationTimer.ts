@@ -1,9 +1,7 @@
-import fs from 'fs'
 import { add, formatDistanceToNow } from 'date-fns'
-// user defined
-import * as RedisHelper from './redisHelper'
-import * as MongoHelper from './mongoHelper'
-import log from './logger'
+import fs from 'fs'
+import { getDb, getRedisClient } from '../helper'
+import { log } from '../utils'
 
 // get all categories
 const { CONFIG_FILE_PATH = 'config/scrapConfig.json' } = process.env
@@ -15,8 +13,8 @@ const { itemsCategories = [] } = JSON.parse(configFile) as {
 }
 
 export async function estimateTimeToCompletion() {
-  const client = await RedisHelper.getRedisClient()
-  const db = await MongoHelper.getDb()
+  const client = await getRedisClient()
+  const db = await getDb()
   const processedRequestsHistory: number[] = []
   const INTERVAL = 3000
   const lastProcessedRequests = {
@@ -45,25 +43,21 @@ export async function estimateTimeToCompletion() {
   }
   async function getRemainingItems() {
     let remainingItems = 0
-    // iterate each category
+    // get pending items
     for await (const category of itemsCategories) {
-      // get pending items
       const pendingItems =
         (await client.SMEMBERS(`pendingItems:${category}`)) || []
-      // get items to be updated in db
-      const collection = db.collection(category)
-
-      // combine both
-      remainingItems +=
-        pendingItems.length +
-          (await collection.countDocuments({
-            isUpdating: false,
-            updatedAt: {
-              $lt: new Date(new Date().setHours(13, 0, 0))
-            }
-          })) || 0
+      remainingItems += pendingItems?.length || 0
     }
-    return remainingItems
+    // get to-be-updated items
+    const updatePendingItems =
+      (await db.collection('parts').countDocuments({
+        isUpdating: false,
+        updatedAt: {
+          $lt: new Date(new Date().setHours(13, 0, 0))
+        }
+      })) || 0
+    return remainingItems + updatePendingItems
   }
 
   async function getUpdatedWork() {
@@ -79,10 +73,6 @@ export async function estimateTimeToCompletion() {
   }
 
   async function init() {
-    // total works to insert/update
-    const totalPages = await getRemainingPages()
-    const totalItems = await getRemainingItems()
-
     // if the app restarts restore last updated works count
     const { itemsUpdated, pagesUpdated } = await getUpdatedWork()
     lastProcessedRequests.items = itemsUpdated
@@ -128,6 +118,10 @@ export async function estimateTimeToCompletion() {
           seconds: estimatedTimeToCompletionInSeconds
         })
 
+        // total works to insert/update
+        const totalPages = +remainingPages + +pagesUpdated
+        const totalItems = +remainingItems + +itemsUpdated
+
         process.stdout.write('\u001b[3J\u001b[2J\u001b[1J')
         console.clear()
         log.info('Total pages to scrap: ', `${remainingPages}/${totalPages}`)
@@ -145,22 +139,4 @@ export async function estimateTimeToCompletion() {
 
   init()
   log.info('Estimating time to completion...')
-}
-
-// wait for pending work
-export async function waitForPendingWork(pendingWorkTypePrefix: string) {
-  const client = await RedisHelper.getRedisClient()
-  const pendingWorksCategories =
-    (await client.KEYS(`pending${pendingWorkTypePrefix}:*`)) || ([] as string[])
-  const multi = client.multi()
-  pendingWorksCategories.forEach(pendingWork => multi.SMEMBERS(pendingWork))
-  const pendingWorks = ((await multi.exec()) as string[][]) || []
-  const totalPendingWorks = pendingWorks.reduce(
-    (acc, pendingWork) => acc + pendingWork.length,
-    0
-  )
-  // roughly wait for pending works to prevent infinite loop (1.75: just enough padding)
-  return new Promise(resolve =>
-    setTimeout(resolve, Math.ceil(totalPendingWorks * 1.75 * 1000))
-  )
 }

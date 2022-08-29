@@ -1,5 +1,5 @@
 import { createClient } from 'redis'
-import log from './logger'
+import { log, useCleanup } from '../utils'
 
 let client: ReturnType<typeof createClient>
 
@@ -14,6 +14,10 @@ export async function initiateRedisClient() {
     await client.connect()
     client.on('error', async () => {
       await initiateRedisClient()
+    })
+
+    useCleanup(async () => {
+      await client.quit()
     })
   } catch (error) {
     log.error('RedisHelper', 'Error connecting to redis, exiting')

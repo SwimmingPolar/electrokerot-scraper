@@ -8,7 +8,7 @@
     "filters": ["#searchAttributeValueRep748297", "..."],
     "categoryNumber": "112747"
   },
-  "mainboard": {
+  "motherboard": {
     "minimumDate": "2015",
     "filters": ["...", "..."],
     "categoryNumber": "..."
@@ -17,17 +17,17 @@
     "categoryNumber": "..."
   },
 
-  "categories": ["cpu", "mainboard", "memory"],
+  "categories": ["cpu", "motherboard", "memory"],
   "pages:cpu": [1, 2],
-  "pages:mainboard": [1],
+  "pages:motherboard": [1],
   "pages:memory": [1, 2, 3, 4],
 
-  "pendingPages": ["cpu", "mainboard", "memory"],
+  "pendingPages": ["cpu", "motherboard", "memory"],
   "pendingPages:cpu": [1, 2, 3],
-  "pendingPages:mainboard": [1],
+  "pendingPages:motherboard": [1],
   "pendingPages:memory": [1, 2],
 
-  "pendingItems": ["cpu", "mainboard"],
-  "pendingItems:cpu": ["somep code", "#2", "#3"],
-  "pendingItems:mainboard": ["#1", "#2", "#3"]
+  "pendingItems": ["cpu", "motherboard"],
+  "pendingItems:cpu": ["#1", "#2", "#3"],
+  "pendingItems:motherboard": ["#1", "#2", "#3"]
 }

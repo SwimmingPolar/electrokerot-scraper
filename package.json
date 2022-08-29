@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "set NODE_ENV=development && nodemon",
+    "start": "NODE_ENV=development nodemon || set NODE_ENV=development && nodemon",
     "build": "tsc && esbuild --bundle --platform=node --format=esm --external:./node_modules/* --outfile=./build/index.js index.ts"
   },
   "repository": {
@@ -46,6 +46,7 @@
     "puppeteer-extra-plugin-adblocker": "^2.13.4",
     "puppeteer-extra-plugin-stealth": "^2.11.0",
     "redis": "^4.2.0",
+    "unique-random-array": "^3.0.0",
     "user-agents": "^1.0.1091",
     "useragent": "^2.3.0"
   },

@@ -1,48 +1,6 @@
-import { Browser } from 'puppeteer'
-import puppeteer from 'puppeteer-extra'
-import AdblockerPlugin from 'puppeteer-extra-plugin-adblocker'
-import StealthPlugin from 'puppeteer-extra-plugin-stealth'
-import log from './logger'
-import randomUserAgent from './randomUserAgent'
+import { getBrowser } from '../helper'
 
-let browser: Browser
-
-puppeteer.use(AdblockerPlugin({ blockTrackers: true })).use(StealthPlugin())
-
-export default async function initiateBrowser() {
-  // execution context
-  const isProduction = process.env.NODE_ENV === 'production'
-  const proxy = process.env.HTTP_PROXY
-  const args = ['--disable-dev-shm-usage', '--no-sandbox']
-  if (isProduction && proxy) {
-    args.push(`--proxy-server=${proxy}`)
-  }
-  // different config for execution context
-  const puppeteerConfig = {
-    defaultViewport: null,
-    headless: isProduction ? true : false,
-    executablePath: isProduction
-      ? process.env.PUPPETEER_EXECUTABLE_PATH
-      : puppeteer.executablePath(),
-    args
-  }
-
-  if (!browser) {
-    try {
-      browser = await puppeteer.launch(puppeteerConfig)
-      // re-open browser in case it crashes
-      browser.on('disconnected', async () => {
-        await initiateBrowser()
-      })
-    } catch (error) {
-      log.error('PuppeteerHelper', error + '')
-      process.exit(1)
-    }
-  }
-  return browser
-}
-
-export async function getLastPage({
+export async function pageIndexParser({
   baseUrl,
   categoryNumber,
   filters = []
@@ -51,13 +9,10 @@ export async function getLastPage({
   categoryNumber: string
   filters: string[]
 }) {
-  if (!browser) {
-    await initiateBrowser()
-  }
+  const browser = await getBrowser()
   const page = await browser.newPage()
 
   try {
-    await page.setUserAgent(randomUserAgent())
     /**
      * GOTO the target page
      */

@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express'
-import fetch from 'node-fetch'
 import HttpsProxyAgent from 'https-proxy-agent'
-import log from './logger'
+import fetch from 'node-fetch'
+import { log } from '../utils'
 
 const PORT = Math.floor(Math.random() * 10000) + 10000
 
@@ -19,12 +19,13 @@ const PORT = Math.floor(Math.random() * 10000) + 10000
   app.listen(PORT)
 })()
 
-export default async function () {
+export async function checkProxyStatus() {
   try {
+    // proxy connection to tor will fail if tor is not running
+    // and will throw error which is going to result in process exit
     await fetch(`http://127.0.0.1:${PORT}/proxyStatus`, {
       agent: HttpsProxyAgent(process.env.HTTP_PROXY || '')
     })
-    return true
   } catch (error) {
     log.error('ProxyStatus', 'Proxy is down')
     process.exit(1)

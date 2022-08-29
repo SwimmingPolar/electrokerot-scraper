@@ -1,7 +1,5 @@
 import fs from 'fs'
-import { getRedisClient } from './redisHelper'
-import initiateBrowser, { getLastPage } from './getLasPage'
-import log from './logger'
+import { getBrowser, getRedisClient, pageIndexParser } from '../helper'
 
 interface ScrapConfig {
   pageBaseUrl: string
@@ -34,24 +32,24 @@ export interface CategoryMeta {
   filters?: string[]
 }
 
-export default async function () {
+export async function configParser() {
+  const browser = await getBrowser()
   const client = await getRedisClient()
-  const browser = await initiateBrowser()
+
+  const { CONFIG_FILE_PATH = 'config/scrapConfig.json' } = process.env
+  const configFile = fs.readFileSync(CONFIG_FILE_PATH, {
+    encoding: 'utf8'
+  })
+  const config: ScrapConfig = JSON.parse(configFile)
+  const { pageBaseUrl, itemBaseUrl, minimumDate, ignoreWords, categories } =
+    config
+  await client
+    .multi()
+    .SET('pageBaseUrl', pageBaseUrl)
+    .SET('itemBaseUrl', itemBaseUrl)
+    .exec()
 
   try {
-    const { CONFIG_FILE_PATH = 'config/scrapConfig.json' } = process.env
-    const configFile = fs.readFileSync(CONFIG_FILE_PATH, {
-      encoding: 'utf8'
-    })
-    const config: ScrapConfig = JSON.parse(configFile)
-    const { pageBaseUrl, itemBaseUrl, minimumDate, ignoreWords, categories } =
-      config
-    await client
-      .multi()
-      .SET('pageBaseUrl', pageBaseUrl)
-      .SET('itemBaseUrl', itemBaseUrl)
-      .exec()
-
     // PARSE each categories concurrently
     await Promise.allSettled(
       categories.map(async category => {
@@ -86,7 +84,7 @@ export default async function () {
         let end: number | string | undefined = category.end
         // if end is not defined, scrap all pages
         if (!end || end === '*') {
-          end = await getLastPage({
+          end = await pageIndexParser({
             baseUrl: pageBaseUrl,
             categoryNumber,
             filters: stringifiedFilters
@@ -109,6 +107,6 @@ export default async function () {
       })
     )
   } finally {
-    browser.close()
+    await browser.close()
   }
 }

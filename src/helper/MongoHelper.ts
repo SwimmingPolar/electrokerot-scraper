@@ -1,5 +1,5 @@
-import { MongoClient, Db } from 'mongodb'
-import log from './logger'
+import { Db, MongoClient } from 'mongodb'
+import { log, useCleanup } from '../utils'
 
 let mongoClient: MongoClient
 let db: Db
@@ -11,6 +11,10 @@ export async function initiateMongoClient() {
 
     const DB_NAME = process.env.DB_NAME || 'default_db'
     db = mongoClient.db(DB_NAME)
+
+    useCleanup(async () => {
+      await mongoClient.close()
+    })
   } catch (error) {
     log.error('MongodbHelper', error + ', exiting')
     process.exit(1)
