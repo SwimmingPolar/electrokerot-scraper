@@ -37,7 +37,7 @@ Updater와 Crawler 모두 request limiter를 통해 한 번에 처리할 수 있
 
 스크래핑을 하는 Crawler의 request limiter를 올릴 경우 ip차단의 가능성이 있음
 
-Updater의 수가 많을 수록 업데이트 속도가 빨라지지만, Crawler의 request limiter(default: 3) 때문에 병목이 있음으로, Updater와 Crawler의 전체적인 밸런스가 중요하다. 토어 네트워크를 우회한 요청의 경우, http 요청 완료에 요청 당 평균 1.5분의 시간이 소요되고 전체 처리 과정의 오버헤드를 감안하여 rest api 요청 처리 시간을 1.75분으로 산정한다. 이를 기준으로 노드 인스턴스의 수를 적절하게 조절하면 되겠다.
+Updater의 수가 많을 수록 업데이트 속도가 빨라지지만, Crawler의 request limiter(default: 3) 때문에 병목이 있음으로, Updater와 Crawler의 전체적인 밸런스가 중요하다. 토 네트워크를 우회한 요청의 경우, http 요청 완료에 요청 당 평균 1.5분의 시간이 소요되고 전체 처리 과정의 오버헤드를 감안하여 rest api 요청 처리 시간을 1.75분으로 산정한다. 이를 기준으로 노드 인스턴스의 수를 적절하게 조절하면 되겠다.
 
 ## 로컬 환경에서 실행 (개발 환경)
 
@@ -63,7 +63,7 @@ Redis의 경우, 보안 취약점 때문에 기본적인 패스워드가 없을 
 
 도커 스웜을 사용하기 위해선 레지스트리가 필요함으로, 로컬에 생성한다.
 
-`docker create service --name registry --publish published=5000,target=5000 registry:2`
+`docker create service --name registry --publish 5000:5000 registry:2`
 
 ### 볼륨 생성
 
@@ -103,6 +103,8 @@ docker compose 3.0 이상에서 서비스 시작 순서를 보장하는 오케�
 
 `watch -n 1 docker service ls`
 
+`docker stack services collector`
+
 `docker service logs collector_scraper`
 
 `docker service logs collector_updater`
@@ -111,54 +113,12 @@ docker compose 3.0 이상에서 서비스 시작 순서를 보장하는 오케�
 
 ## 오류
 
-토어를 우회하는 요청이다보니 다양한 네트워크 오류가 발생한다. 아직 명확한 이유는 모르겠으며, 한 번 스크래핑 후 남은 목록을 다시 스크래핑하는 방법 밖에는 없어보인다. 네트워크 오류 외 아직 여러 버그가 존재함
+토르를 우회하는 요청이다보니 다양한 네트워크 오류가 발생한다. 아직 명확한 이유는 모르겠으며, 한 번 스크래핑 후 남은 목록을 다시 스크래핑하는 방법 밖에는 없어보인다. 네트워크 오류 외 아직 여러 버그가 존재함
 
 ## 실행 환경 사양
 
 3.6Ghz 8코어 16쓰레드, 32GB 메모리 환경에서
 
-- 15개의 Updater
-- 35개의 Crawler
-- 10개의 Tor
-
-인스턴스들을 올렸을 경우, 종종 다운된다. 연산이 많지 않음에도 이런 건 노드들 간의 sleep 없는 restapi 통신 (cpu)이나 인스턴스 수(memory) 자체가 많아서 이런 현상을 보이는 거 같다. 환경에 따라 적절하게 재단해서 사용해야 해야함
-
 ## 속도
 
-1개의 요청은 1개의 페이지나 1개의 ajax요청으로 생각하고, 7500개의 요청을 완료하는데보 대략 2~3 시간 정도 걸린다.
-
-## Updater에서 Page Update 시, 업데이트하는 항목
-
-### items collection
-
-| field     | type      |
-| --------- | --------- |
-| \_id      | object id |
-| pcode     | string    |
-| name      | string    |
-| tags      | array     |
-| category  | string    |
-| updatedAt | date      |
-
-### category collection
-
-| field     | type      |
-| --------- | --------- |
-| \_id      | object id |
-| pcode     | string    |
-| name      | string    |
-| tag       | string    |
-| variants  | array     |
-| sortOrder | string    |
-| stock     | boolean   |
-| isVariant | boolean   |
-
-## Updater에서 Item 업데이트 시, 업데이트하는 항목
-
-### category collection
-
-| field     | type   |
-| --------- | ------ |
-| vendors   | array  |
-| details   | object |
-| updatedAt | date   |
+1개의 요청은 1개의 페이지나 1개의 ajax요청으로 생각하고, 8000개의 요청을 완료하는데보 대략 2 시간 정도 걸린다.
