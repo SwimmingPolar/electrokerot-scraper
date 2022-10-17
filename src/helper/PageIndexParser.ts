@@ -1,5 +1,7 @@
 import { getBrowser } from '../helper'
 
+const TIMEOUT = 120000
+
 export async function pageIndexParser({
   baseUrl,
   categoryNumber,
@@ -17,7 +19,7 @@ export async function pageIndexParser({
      * GOTO the target page
      */
     await page.goto(`${baseUrl}${categoryNumber}`, {
-      timeout: 120000,
+      timeout: TIMEOUT,
       waitUntil: 'networkidle2'
     })
 
@@ -30,14 +32,14 @@ export async function pageIndexParser({
       await page.waitForSelector(
         '#frmProductList > div.option_nav > div.nav_header > div.head_opt > button',
         {
-          timeout: 120000
+          timeout: TIMEOUT
         }
       )
       await page.click(
         '#frmProductList > div.option_nav > div.nav_header > div.head_opt > button'
       )
       await page.waitForSelector('#extendSearchOptionpriceCompare', {
-        timeout: 120000
+        timeout: TIMEOUT
       })
       // disconnect network to prevent redundant http requests
       await page.setOfflineMode(true)
@@ -60,7 +62,7 @@ export async function pageIndexParser({
     await page.waitForSelector(
       '#productListArea > div.prod_list_opts > div.view_opt > div.view_item.view_qnt > select',
       {
-        timeout: 120000
+        timeout: TIMEOUT
       }
     )
     await page.select(
@@ -94,12 +96,12 @@ export async function pageIndexParser({
       // wait for the next page to load if there is one
       if (IsNextPageAvailable) {
         await page.waitForSelector(contentSelector, {
-          timeout: 120000
+          timeout: TIMEOUT
         })
       }
 
-      // each tab/page will wait for 0~3 seconds to avoid too many requests
-      await page.waitForTimeout(1000 * Math.random() * 5)
+      // each tab/page will wait for 1~3 seconds to avoid too many requests
+      await page.waitForTimeout(1000 * Math.ceil(Math.random() * 3))
     } while (IsNextPageAvailable)
 
     // CLICK last page
@@ -117,7 +119,7 @@ export async function pageIndexParser({
 
     // wait for the last page to load
     await page.waitForSelector(contentSelector, {
-      timeout: 120000
+      timeout: TIMEOUT
     })
 
     const itemsLengthInLastPage = await page.evaluate(() => {

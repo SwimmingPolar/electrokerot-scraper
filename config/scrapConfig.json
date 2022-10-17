@@ -20,6 +20,7 @@
       "categoryNumber": "112747",
       "start": "1",
       "end": "*",
+      "ignoreWords": ["해외구매"],
       "filters": [
         {
           "name": "제조사: 인텔",

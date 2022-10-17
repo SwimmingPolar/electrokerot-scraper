@@ -24,7 +24,7 @@ export async function checkProxyStatus() {
     // proxy connection to tor will fail if tor is not running
     // and will throw error which is going to result in process exit
     await fetch(`http://127.0.0.1:${PORT}/proxyStatus`, {
-      agent: HttpsProxyAgent(process.env.HTTP_PROXY || '')
+      agent: HttpsProxyAgent(process.env.HTTP_PROXY?.trim() || '')
     })
   } catch (error) {
     log.error('ProxyStatus', 'Proxy is down')

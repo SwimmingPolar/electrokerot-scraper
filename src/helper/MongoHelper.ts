@@ -9,7 +9,7 @@ export async function initiateMongoClient() {
     const { MONGODB_URL = '' } = process.env
     mongoClient = await new MongoClient(MONGODB_URL).connect()
 
-    const DB_NAME = process.env.DB_NAME || 'default_db'
+    const DB_NAME = process.env.DB_NAME?.trim() || 'default_db'
     db = mongoClient.db(DB_NAME)
 
     useCleanup(async () => {

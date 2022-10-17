@@ -89,7 +89,7 @@ if (process.env.NODE_ENV?.trim() === 'development') {
       const category = (await client.SRANDMEMBER('categories')) as string
 
       /**
-       * Get 3 < n < 6 pages from redis
+       * Get 3 ~ 6 pages from redis
        */
       const pageCount = Math.ceil(Math.random() * 3 + 3)
       const pages = await client.SPOP(`pages:${category}`, pageCount)
@@ -121,7 +121,8 @@ if (process.env.NODE_ENV?.trim() === 'development') {
        */
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const requestUrl =
-        process.env.UPDATE_PAGES_URL || 'http://localhost:10000/updatePages'
+        process.env.UPDATE_PAGES_URL?.trim() ||
+        'http://localhost:10000/updatePages'
       await sendRequest(requestUrl, {
         category,
         url: pageBaseUrl + categoryNumber,
@@ -168,7 +169,7 @@ if (process.env.NODE_ENV?.trim() === 'development') {
       }
 
       /**
-       * Get 5 < n < 10 items from random category which are not
+       * Get 3 ~ 4 items from random category which are not
        * currently updating and are not scraped yet
        */
       const pcodes = await getRandomItems(category)
@@ -183,7 +184,8 @@ if (process.env.NODE_ENV?.trim() === 'development') {
        * Send request to update items
        */
       const requestUrl =
-        process.env.UPDATE_ITEMS_URL || 'http://localhost:10000/updateItems'
+        process.env.UPDATE_ITEMS_URL?.trim() ||
+        'http://localhost:10000/updateItems'
       await sendRequest(requestUrl, {
         baseUrl: itemBaseUrl,
         category,
@@ -275,27 +277,17 @@ export async function waitForPendingWork(pendingWorkTypePrefix: string) {
     0
   )
 
-  // number of random 'items' to be scraped per request (3 ~ 6 per request)
-  const maximumItemsToScrapPerRequest = 6
-  // scale updater instance from 1 to 3
-  const updaterInstance = 4
-  const updaterInstanceRequestLimit = 10
-  // scale crawler instance from 10 to 30
+  // crawler instance
   const crawlerInstance = 35
   const crawlerInstanceRequestLimit = 7
-  const torProxiedRequestProcessingTimeInMs = 1.75 * 60 * 1000
-
-  const maximumItemsToProcess =
-    maximumItemsToScrapPerRequest *
-    updaterInstance *
-    updaterInstanceRequestLimit
 
   // processing capacity is the number of items that can be processed in parallel
-  const processingCapacity =
-    (crawlerInstance * crawlerInstanceRequestLimit) / maximumItemsToProcess
+  const processingCapacity = crawlerInstance * crawlerInstanceRequestLimit
+
+  const torProxiedRequestProcessingTimeInMs = 1.75 * 60 * 1000
 
   const timeToBeWaited = Math.ceil(
-    (totalPendingWorks / maximumItemsToProcess / processingCapacity) *
+    (totalPendingWorks / processingCapacity) *
       torProxiedRequestProcessingTimeInMs
   )
 
@@ -362,8 +354,8 @@ async function getRandomItems(category: string) {
             }
           },
           {
-            // limit items total to 3~5
-            $limit: Math.floor(Math.random() * 3 + 3)
+            // limit items total to 3~4
+            $limit: 3 + Math.floor(Math.random() * 2)
           },
           { $project: { pcode: 1 } }
         ])

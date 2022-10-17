@@ -54,7 +54,7 @@ export async function estimateTimeToCompletion() {
       (await db.collection('parts').countDocuments({
         isUpdating: false,
         updatedAt: {
-          $lt: new Date(new Date().setHours(13, 0, 0))
+          $lt: new Date(new Date().setHours(10, 0, 0))
         }
       })) || 0
     return remainingItems + updatePendingItems

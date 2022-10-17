@@ -8,8 +8,8 @@ let isInitialized = false
 export async function initiateRedisClient() {
   try {
     client = createClient({
-      url: process.env.REDIS_URL,
-      password: process.env.REDIS_PASSWORD
+      url: process.env.REDIS_URL?.trim(),
+      password: process.env.REDIS_PASSWORD?.trim()
     })
     await client.connect()
     client.on('error', async () => {
